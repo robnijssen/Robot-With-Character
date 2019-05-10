@@ -36,13 +36,13 @@ class Variables:
 
 class Callbacks:
     def idle(self, feedback):
-        variables.idle_feedback = feedback.data
+        controlVariables.idle_feedback = feedback.data
     def invite(self, feedback):
-        variables.invite_feedback = feedback.data
+        controlVariables.invite_feedback = feedback.data
     def play(self, feedback):
-        variables.play_feedback = feedback.data
+        controlVariables.play_feedback = feedback.data
     def react(self, feedback):
-        variables.react_feedback = feedback.data
+        controlVariables.react_feedback = feedback.data
 
 # state machine
 
@@ -59,12 +59,12 @@ class Idle(State):
     def mainRun(self):
         # publish state 0
         cmd_state_publisher.publish(0)
-        rospy.sleep(constants.sleeptime)
+        rospy.sleep(controlConstants.sleeptime)
     def next(self):
-        if(variables.idle_feedback == 0):
+        if(controlVariables.idle_feedback == 0):
             # still no person detected within 2 meters
             return MainControlMachine.idle
-        elif(variables.idle_feedback == 1):
+        elif(controlVariables.idle_feedback == 1):
             # person detected within 2 meters
             return MainControlMachine.invite
         else:
@@ -77,15 +77,15 @@ class Invite(State):
     def mainRun(self):
         # publish state 1
         cmd_state_publisher.publish(1)
-        rospy.sleep(constants.sleeptime)
+        rospy.sleep(controlConstants.sleeptime)
     def next(self):
-        if(variables.invite_feedback == 0):
+        if(controlVariables.invite_feedback == 0):
             # person still detected within 2 meters
             return MainControlMachine.invite
-        elif(variables.invite_feedback == 1):
+        elif(controlVariables.invite_feedback == 1):
             # person detected within 1 meter
             return MainControlMachine.play
-        elif(variables.invite_feedback == 2):
+        elif(controlVariables.invite_feedback == 2):
             # no person detected within 2 meters
             return MainControlMachine.idle
         else:
@@ -98,18 +98,18 @@ class Play(State):
     def mainRun(self):
         # publish state 2
         cmd_state_publisher.publish(2)
-        rospy.sleep(constants.sleeptime)
+        rospy.sleep(controlConstants.sleeptime)
     def next(self):
-        if(variables.play_feedback == 0):
+        if(controlVariables.play_feedback == 0):
             # (not done playing) and (person still within 2 meter)
             return MainControlMachine.play
-        elif(variables.play_feedback == 1):
+        elif(controlVariables.play_feedback == 1):
             # (not done playing) and (no person within 2 meters)
             return MainControlMachine.idle
-        elif(variables.play_feedback == 2):
+        elif(controlVariables.play_feedback == 2):
             # (done playing) and (person within 2 meter)
             return MainControlMachine.react
-        elif(variables.play_feedback == 3):
+        elif(controlVariables.play_feedback == 3):
             # (done playing) and (no person within 2 meter)
             return MainControlMachine.idle
         else:
@@ -122,15 +122,15 @@ class React(State):
     def mainRun(self):
         # publish state 3
         cmd_state_publisher.publish(3)
-        rospy.sleep(constants.sleeptime)
+        rospy.sleep(controlConstants.sleeptime)
     def next(self):
-        if(variables.react_feedback == 0):
+        if(controlVariables.react_feedback == 0):
             # not done reacting
             return MainControlMachine.react
-        elif(variables.react_feedback == 1):
+        elif(controlVariables.react_feedback == 1):
             # (done reacting) and (person within 2 meter)
             return MainControlMachine.invite
-        elif(variables.react_feedback == 2):
+        elif(controlVariables.react_feedback == 2):
             # (done reacting) and (no person within 2 meter)
             return MainControlMachine.idle
         else:
@@ -156,13 +156,13 @@ if __name__ == '__main__':
         cmd_state_publisher = rospy.Publisher('/cmd_state', Int8, queue_size=1)
 
         # init subscribers
-        variables = Variables()
-        constants = Constants()
-        callbacks = Callbacks()
-        fb_idle = rospy.Subscriber("/fb_idle", Int8, callbacks.idle)
-        fb_invite = rospy.Subscriber("/fb_invite", Int8, callbacks.invite)
-        fb_play = rospy.Subscriber("/fb_play", Int8, callbacks.play)
-        fb_react = rospy.Subscriber("/fb_react", Int8, callbacks.react)
+        controlVariables = Variables()
+        controlConstants = Constants()
+        controlCallbacks = Callbacks()
+        controlFb_idle = rospy.Subscriber("/fb_idle", Int8, controlCallbacks.idle)
+        controlFb_invite = rospy.Subscriber("/fb_invite", Int8, controlCallbacks.invite)
+        controlFb_play = rospy.Subscriber("/fb_play", Int8, controlCallbacks.play)
+        controlFb_react = rospy.Subscriber("/fb_react", Int8, controlCallbacks.react)
         
         # instantiate state machine
         #<statemachine_name>.<state_without_capital_letter> = <state_class_name>()
