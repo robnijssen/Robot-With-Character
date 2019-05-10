@@ -28,7 +28,7 @@ class Constants:
 
 class Variables:
     # a variable to keep track of what state the control is in
-    cmd_state = 1
+    reactCmd_state = 1
     # a variable to keep track if a person is detected
     person_detected = False
     # a variable to keep track if the bot won or lost
@@ -36,24 +36,24 @@ class Variables:
     # a variable to keep track if cheating was a success
     success = False
     # a variable to keep track if the wiggle is complete
-    fb_happy_reaction = False
+    reactFb_happy_reaction = False
     # a variable to keep track of how far away the face is
-    distance_to_face = 0
+    reactDistance_to_face = 0
 
 # functions used in state machine
 
 class Callbacks:
     def state(self, state):
-        variables.cmd_state = state.data
+        reactVariables.reactCmd_state = state.data
     def happy(self, happy):
-        variables.fb_happy_reaction = happy.data
-    def distance_to_face(self, distance):
-        variables.distance_to_face = distance.data
+        reactVariables.reactFb_happy_reaction = happy.data
+    def reactDistance_to_face(self, distance):
+        reactVariables.reactDistance_to_face = distance.data
     def score(self, won):
         if won == 0:
-            variables.won = False
+            reactVariables.won = False
         else:
-            variables.won = True
+            reactVariables.won = True
 
 # state machine
 
@@ -72,9 +72,9 @@ class Idle(State):
         cmd_react_publisher.publish(0)
         # publish feedback 0 (not active / not done reacting)
         fb_react_publisher.publish(0)
-        rospy.sleep(constants.sleeptime)
+        rospy.sleep(reactConstants.sleeptime)
     def next(self):
-        if(variables.cmd_state == 3):
+        if(reactVariables.reactCmd_state == 3):
             return ReactMachine.check
         else:
             return ReactMachine.idle
@@ -86,14 +86,14 @@ class Check(State):
         # publish state 1
         cmd_react_publisher.publish(1)
         # check for people
-        variables.person_detected = False
+        reactVariables.person_detected = False
         '''
         while not variables.fb_check_for_people_done == 1:
-            if variables.distance_to_face > 0:
+            if variables.reactDistance_to_face > 0:
                 variables.person_detected = True
         '''
-        if variables.distance_to_face > 0:
-            variables.person_detected = True
+        if reactVariables.reactDistance_to_face > 0:
+            reactVariables.person_detected = True
         '''
         # for debugging, y=person n=no_person
         rospy.loginfo("React: Is there a person within 2 meters? (y/n) (only for debugging)")
@@ -119,9 +119,9 @@ class Check(State):
             rospy.logwarn("React: The input wasn't y or n. Taking that as a no.")
         '''
     def next(self):
-        if variables.person_detected == False:
+        if reactVariables.person_detected == False:
             return ReactMachine.reactDissappointed
-        elif variables.won == True:
+        elif reactVariables.won == True:
             return ReactMachine.reactHappy
         else:
             return ReactMachine.reactSad
@@ -133,11 +133,11 @@ class ReactDissappointed(State):
         # do disappointed move here
         # publish state 2
         cmd_react_publisher.publish(2)
-        rospy.sleep(constants.sleeptime)
+        rospy.sleep(reactConstants.sleeptime)
     def next(self):
-        rospy.sleep(constants.debugtime)
+        rospy.sleep(reactConstants.debugtime)
         fb_react_publisher.publish(2)
-        rospy.sleep(constants.sleeptime)
+        rospy.sleep(reactConstants.sleeptime)
         return ReactMachine.idle
 
 class ReactHappy(State):
@@ -146,15 +146,15 @@ class ReactHappy(State):
     def mainRun(self):
         # publish state 3 (do happy move in function_emotional_happy_wiggle)
         cmd_react_publisher.publish(3)
-        rospy.sleep(constants.sleeptime)
+        rospy.sleep(reactConstants.sleeptime)
     def next(self):
-        if variables.fb_happy_reaction == True:
+        if reactVariables.reactFb_happy_reaction == True:
             # publish done with reaction move
-            if variables.person_detected == True:
+            if reactVariables.person_detected == True:
                 fb_react_publisher.publish(1)
             else:
                 fb_react_publisher.publish(2)
-            rospy.sleep(2 * constants.sleeptime)
+            rospy.sleep(2 * reactConstants.sleeptime)
             return ReactMachine.idle
         else:
             return ReactMachine.reactHappy
@@ -165,15 +165,15 @@ class ReactSad(State):
     def mainRun(self):
         # publish state 4
         cmd_react_publisher.publish(4)
-        rospy.sleep(constants.sleeptime)
+        rospy.sleep(reactConstants.sleeptime)
         # do sad move here
     def next(self):
-        rospy.sleep(constants.sleeptime)
-        if variables.person_detected == True:
+        rospy.sleep(reactConstants.sleeptime)
+        if reactVariables.person_detected == True:
             fb_react_publisher.publish(1)
         else:
             fb_react_publisher.publish(2)
-        rospy.sleep(constants.debugtime)
+        rospy.sleep(reactConstants.debugtime)
         return ReactMachine.idle
 
 class Cheat(State):
@@ -182,20 +182,20 @@ class Cheat(State):
     def mainRun(self):
         # publish state 5
         cmd_react_publisher.publish(5)
-        rospy.sleep(constants.sleeptime)
+        rospy.sleep(reactConstants.sleeptime)
         # do cheating moves here
         # check for success
         # for debugging, y=success n=no_success
         rospy.loginfo("React: Cheated. Was it a success? (y/n) (only for debugging)")
         tmp_input = raw_input()
         if tmp_input == 'y':
-            variables.success = True
+            reactVariables.success = True
         elif tmp_input == 'n':
-            variables.success = False
+            reactVariables.success = False
         else:
             rospy.logwarn("React: The input wasn't y or n. Taking that as a no.")
     def next(self):
-        if variables.success == True:
+        if reactVariables.success == True:
             return ReactMachine.reactHappy
         else:
             return ReactMachine.reactSad
@@ -220,13 +220,13 @@ if __name__ == '__main__':
         fb_react_publisher = rospy.Publisher('/fb_react', Int8, queue_size=1)
 
         # init subscribers
-        variables = Variables()
-        callbacks = Callbacks()
-        constants = Constants()
-        cmd_state = rospy.Subscriber("/cmd_state", Int8, callbacks.state)
-        fb_happy_reaction = rospy.Subscriber("/fb_happy_reaction", Int8, callbacks.happy)
-        distance_to_face = rospy.Subscriber("/vision_face_d", Int8, callbacks.distance_to_face)
-        final_score = rospy.Subscriber("/final_score", Int8, callbacks.score)
+        reactVariables = Variables()
+        reactCallbacks = Callbacks()
+        reactConstants = Constants()
+        reactCmd_state = rospy.Subscriber("/cmd_state", Int8, reactCallbacks.state)
+        reactFb_happy_reaction = rospy.Subscriber("/fb_happy_reaction", Int8, reactCallbacks.happy)
+        reactDistance_to_face = rospy.Subscriber("/vision_face_d", Int8, reactCallbacks.distance_to_face)
+        reactFinal_score = rospy.Subscriber("/final_score", Int8, reactCallbacks.score)
         
         # instantiate state machine
         #<statemachine_name>.<state_without_capital_letter> = <state_class_name>()
