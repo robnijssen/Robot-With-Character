@@ -38,9 +38,9 @@ class Variables:
 
 class Callbacks:
     def state(self, state):
-        variables.cmd_state = state.data
+        inviteVariables.inviteCmd_state = state.data
     def distance_to_face(self, distance):
-        variables.distance_to_face = distance.data
+        inviteVariables.distance_to_face = distance.data
 
 # state machine
 
@@ -55,13 +55,13 @@ class Idle(State):
     def transitionRun(self):
         rospy.loginfo("Invite: Not active.")
     def mainRun(self):
-        rospy.sleep(constants.sleeptime)
+        rospy.sleep(inviteConstants.sleeptime)
         # publish state 0
         cmd_invite_publisher.publish(0)
         # publish feedback 0 for debugging (no person within 1 meters)
         fb_invite_publisher.publish(0)
     def next(self):
-        if(variables.cmd_state == 1):
+        if(inviteVariables.cmd_state == 1):
             return InviteMachine.checkForPeople
         else:
             return InviteMachine.idle
@@ -70,9 +70,9 @@ class CheckForPeople(State):
     def transitionRun(self):
         rospy.loginfo("Invite: Checking for people.")
     def mainRun(self):
-        rospy.sleep(constants.debugtime)
+        rospy.sleep(inviteConstants.debugtime)
         # check for people executed here
-        self.distance = variables.distance_to_face
+        self.distance = inviteVariables.distance_to_face
         if self.distance == 2:
             # person within 2 meters
             fb_invite_publisher.publish(0)
@@ -87,7 +87,7 @@ class CheckForPeople(State):
             return InviteMachine.inviteByLooking
             # to do: add more possibilities and selecting them at random
         else:
-            rospy.sleep(constants.sleeptime)
+            rospy.sleep(inviteConstants.sleeptime)
             return InviteMachine.idle
 
 class InviteByLooking(State):
@@ -95,7 +95,7 @@ class InviteByLooking(State):
         rospy.loginfo("Invite: Inviting person by at looking and shifting between cup and person.")
     def mainRun(self):
         # to do: add the invite by looking move here
-        rospy.sleep(constants.debugtime) # for debugging, wait a bit instead of moving
+        rospy.sleep(inviteConstants.debugtime) # for debugging, wait a bit instead of moving
     def next(self):
         return InviteMachine.checkForPeople
 
@@ -119,11 +119,11 @@ if __name__ == '__main__':
         fb_invite_publisher = rospy.Publisher('/fb_invite', Int8, queue_size=1)
 
         # init subscriber
-        variables = Variables()
-        callbacks = Callbacks()
-        constants = Constants()
-        cmd_state = rospy.Subscriber("/cmd_state", Int8, callbacks.state)
-        distance_to_face = rospy.Subscriber("/vision_face_d", Int8, callbacks.distance_to_face)
+        inviteVariables = Variables()
+        inviteCallbacks = Callbacks()
+        inviteConstants = Constants()
+        inviteCmd_state = rospy.Subscriber("/cmd_state", Int8, inviteCallbacks.state)
+        distance_to_face = rospy.Subscriber("/vision_face_d", Int8, inviteCallbacks.distance_to_face)
 
         # instantiate state machine
         #<statemachine_name>.<state_without_capital_letter> = <state_class_name>()
