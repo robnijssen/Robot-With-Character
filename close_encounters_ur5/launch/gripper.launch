@@ -1,0 +1,11 @@
+<launch>
+    <!-- usb connection group -->
+    <!-- node started here:
+        rosrun robotiq_2f_gripper_control Robotiq2FGripperRtuNode.py /dev/ttyUSB0 
+    -->
+    <!-- to do: add param name
+    <node pkg="robotiq_2f_gripper_control" type="Robotiq2FGripperRtuNode.py" name="Robotiq2FGripperRtuNode">
+        <param name="" value="/dev/ttyUSB0"/>
+    </node>
+    -->
+</launch>
