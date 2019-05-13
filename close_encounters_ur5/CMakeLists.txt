@@ -164,10 +164,24 @@ include_directories(
 
 ## Mark executable scripts (Python etc.) for installation
 ## in contrast to setup.py, you can choose the destination
-# install(PROGRAMS
-#   scripts/my_python_script
-#   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
-# )
+install(PROGRAMS
+  scripts/function_emosional_happy_wiggle.py
+  scripts/function_emotional_track_face.py
+  scripts/function_functional_check_for_face.py
+  scripts/function_functional_pick_dice.py
+  scripts/gripper_check.py
+  scripts/gripper_command.py
+  scripts/pose_joint_printer.py
+  scripts/position_memory.py
+  scripts/state_machine.py
+  scripts/statemachine_control.py.py
+  scripts/statemachine_idle.py
+  scripts/statemachine_invite.py
+  scripts/statemachine_play.py
+  scripts/statemachine_react.py
+  scripts/vision_node.py
+  DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
+)
 
 ## Mark executables and/or libraries for installation
 # install(TARGETS ${PROJECT_NAME} ${PROJECT_NAME}_node

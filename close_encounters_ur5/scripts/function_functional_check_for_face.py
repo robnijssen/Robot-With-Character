@@ -13,6 +13,8 @@ import geometry_msgs.msg
 # state machine stuff
 from state_machine import StateMachineBlueprint as StateMachine
 from state_machine import StateBlueprint as State
+# import service types
+from close_encounters_ur5.srv import SetJointValues, SetJointValuesRequest, SetJointValuesResponse, GetJointValues, GetJointValuesRequest, GetJointValuesResponse
 
 """
 This stays in idle, till it's commanded to do something by the /cmd_idle
@@ -119,6 +121,7 @@ class Left(State):
             else:
                 return CheckMachine.left
         else:
+            group.stop()
             return CheckMachine.idle
 
 class Right(State):
@@ -144,6 +147,7 @@ class Right(State):
             else:
                 return CheckMachine.right
         else:
+            group.stop()
             return CheckMachine.idle
 
 class End(State):
@@ -171,6 +175,7 @@ class End(State):
         if checkForFaceVariables.cmd_idle == 1 and checkForFaceVariables.timer_ended == False:
             return CheckMachine.end
         else:
+            group.stop()
             return CheckMachine.idle
 
 if __name__ == '__main__':
@@ -197,6 +202,12 @@ if __name__ == '__main__':
         cmd_idle = rospy.Subscriber("/cmd_idle", Int8, checkForFaceCallbacks.idle)
         vision_face_d = rospy.Subscriber("/vision_face_d", Int8, checkForFaceCallbacks.face_d)
         
+        # init face position services from the position server
+        rospy.wait_for_service('/set_face_position')
+        happyWiggleGetFaceJointAngles = rospy.ServiceProxy('/set_face_position', SetJointValues)
+        rospy.wait_for_service('/get_face_position')
+        happyWiggleGetFaceJointAngles = rospy.ServiceProxy('/get_face_position', GetJointValues)
+
         # instantiate state machine
         #<statemachine_name>.<state_without_capital_letter> = <state_class_name>()
         CheckMachine.idle = Idle()

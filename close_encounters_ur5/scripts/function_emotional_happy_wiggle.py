@@ -66,10 +66,10 @@ class Functions:
         happyWiggleVariables.left_joint_values = start_joint_values
         happyWiggleVariables.right_joint_values = start_joint_values
         # alter some x rotation values
-        happyWiggleVariables.left_joint_values[0] = happyWiggleConstants.x_multiplier_0 * happyWiggleConstants.global_multiplier
-        happyWiggleVariables.left_joint_values[4] = -1 * happyWiggleConstants.x_multiplier_4 * happyWiggleConstants.global_multiplier
-        happyWiggleVariables.right_joint_values[0] = -1 * happyWiggleConstants.x_multiplier_0 * happyWiggleConstants.global_multiplier
-        happyWiggleVariables.right_joint_values[4] = happyWiggleConstants.x_multiplier_4 * happyWiggleConstants.global_multiplier
+        happyWiggleVariables.left_joint_values[0] += happyWiggleConstants.x_multiplier_0 * happyWiggleConstants.global_multiplier
+        happyWiggleVariables.left_joint_values[4] += -1 * happyWiggleConstants.x_multiplier_4 * happyWiggleConstants.global_multiplier
+        happyWiggleVariables.right_joint_values[0] += -1 * happyWiggleConstants.x_multiplier_0 * happyWiggleConstants.global_multiplier
+        happyWiggleVariables.right_joint_values[4] += happyWiggleConstants.x_multiplier_4 * happyWiggleConstants.global_multiplier
         # make sure the x rotation won't go out of bound
         if happyWiggleVariables.left_joint_values[0] < happyWiggleConstants.left_boundary_0:
             happyWiggleVariables.left_joint_values[0] = happyWiggleConstants.left_boundary_0
