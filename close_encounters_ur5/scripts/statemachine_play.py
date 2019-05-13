@@ -30,7 +30,7 @@ class Constants:
 
 class Variables:
     # a variable to keep track of what state the control is in
-    playCmd_state = 1
+    cmd_state = 1
     # a variable to keep track if the board is set up or not
     board_set_up = False
     # a variable to keep track if a person is detected
@@ -38,7 +38,7 @@ class Variables:
     # a variable to keep track of the turns
     turn_number = 0
     # a variable to keep track of how far away the face is
-    playDistance_to_face = 0
+    distance_to_face = 0
     # score variables
     fb_player_score = 0
     fb_bot_score = 0
@@ -49,10 +49,10 @@ class Variables:
 
 class Callbacks:
     def state(self, state):
-        playVariables.playCmd_state = state.data
-    def playDistance_to_face(self, distance):
-        playVariables.playDistance_to_face = distance.data
-    def playVision_score(self, score):
+        playVariables.cmd_state = state.data
+    def distance_to_face(self, distance):
+        playVariables.distance_to_face = distance.data
+    def vision_score(self, score):
         if playVariables.turn_number % 2 != 0:
             playVariables.fb_player_score = score.data
         else:
@@ -81,7 +81,7 @@ class Idle(State):
         fb_play_publisher.publish(0)
         rospy.sleep(playConstants.sleeptime)
     def next(self):
-        if(playVariables.playCmd_state == 2):
+        if(playVariables.cmd_state == 2):
             return PlayMachine.setUpBoard
         else:
             return PlayMachine.idle
@@ -116,10 +116,10 @@ class Check(State):
         playVariables.person_detected = False
         '''
         while not variables.fb_check_for_people_and_score_done == 1:
-            if variables.playDistance_to_face > 0:
-                variables.person_detected = True
+            if playVariables.distance_to_face > 0:
+                playVariables.distance_to_face = True
         '''
-        if playVariables.playDistance_to_face > 0:
+        if playVariables.distance_to_face > 0:
             playVariables.person_detected = True
     def next(self):
         if playVariables.person_detected == False:
@@ -213,10 +213,11 @@ if __name__ == '__main__':
         # init /final_score publisher to tell the react statemachine if the bot won
         final_score = rospy.Publisher('/final_score', Int8, queue_size=1)
 
-        # init subscriber
         playVariables = Variables()
         playCallbacks = Callbacks()
         playConstants = Constants()
+
+        # init subscriber
         playCmd_state = rospy.Subscriber("/cmd_state", Int8, playCallbacks.state)
         playDistance_to_face = rospy.Subscriber("/vision_face_d", Int8, playCallbacks.distance_to_face)
         playVision_score = rospy.Subscriber("/vision_score", Int8, playCallbacks.vision_score)

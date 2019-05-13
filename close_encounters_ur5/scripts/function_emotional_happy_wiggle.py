@@ -1,7 +1,6 @@
 #!/usr/bin/env python
 import sys
 import rospy
-import time
 import moveit_commander # moveit stuff
 import moveit_msgs # moveit stuff
 import geometry_msgs.msg
@@ -9,7 +8,9 @@ import geometry_msgs.msg
 from state_machine import StateMachineBlueprint as StateMachine
 from state_machine import StateBlueprint as State
 from random import randint
-from std_msgs.msg import Int8, Float32MultiArray
+from std_msgs.msg import Int8
+# import service types
+from close_encounters_ur5.srv import SetJointValues, SetJointValuesRequest, SetJointValuesResponse, GetJointValues, GetJointValuesRequest, GetJointValuesResponse
 
 """
 This stays in idle, till it's commanded to do something by the /cmd_react
@@ -25,7 +26,7 @@ class Constants:
     max_speed = 0.8
     max_acceleration = 0.8
     # movement distance multipliers
-    global_multiplier = 0.3
+    global_multiplier = 0.1
     x_multiplier_0 = 0.3
     x_multiplier_4 = 0.7
     # boundaries to be sure it won't move too far
@@ -47,8 +48,14 @@ class Variables:
     
 class Functions:
     def go_to_face_joint_values(self):
+        # request the joint values from the server
+        req = GetJointValuesRequest()
+        req.request = True
+        res = GetJointValuesResponse()
+        res = happyWiggleGetFaceJointAngles(req)
+        face_values = [res.angle_0, res.angle_1, res.angle_2, res.angle_3, res.angle_4, res.angle_5]
         # compute a plan to get these joint values
-        happyWiggleGroup.set_joint_value_target(happyWiggleGetFaceJointAngles())
+        happyWiggleGroup.set_joint_value_target(face_values)
         # go to the planned position
         happyWiggleGroup.go(wait=True)
         happyWiggleGroup.stop()
@@ -82,13 +89,6 @@ class Functions:
             n += 1
         happyWiggleGroup.stop()
         happyWiggleGroup.clear_pose_targets()
-    #def go_to_joint_values(self, goal_joint_values):
-    #    # compute a plan to get these joint values
-    #    happyWiggleGroup.set_joint_value_target(goal_joint_values)
-    #    # go to the planned position
-    #    happyWiggleGroup.go(wait=True)
-    #    happyWiggleGroup.stop()
-    #    happyWiggleGroup.clear_pose_targets()
 
 # functions used in state machine
 
@@ -223,8 +223,8 @@ if __name__ == '__main__':
         WiggleMachine.wiggle2 = Wiggle2()
 
         # init get face position service from the position server
-        rospy.wait_for_service('get_face_position')
-        happyWiggleGetFaceJointAngles = rospy.ServiceProxy('get_face_position', Float32MultiArray)
+        rospy.wait_for_service('/get_face_position')
+        happyWiggleGetFaceJointAngles = rospy.ServiceProxy('/get_face_position', GetJointValues)
 
         # run
         WiggleMachine().runAll(0)

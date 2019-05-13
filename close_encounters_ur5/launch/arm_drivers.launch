@@ -6,14 +6,14 @@
         roslaunch ur5_moveit_config ur5_moveit_planning_execution.launch limited:=true robot_ip:=192.168.66.3
         roslaunch ur5_moveit_config moveit_rviz.launch config:=true robot_ip:=192.168.66.3
     -->
-    <include file="$(find ur_modern_driver)/launch/ur5_bringup.launch">
+    <include file="$(find ur5)/launch/ur5_bringup.launch">
         <param name="robot_ip" value="$(arg ur5_ip)"/>
     </include>
-    <include file="$(find ur5_moveit_config)/launch/ur5_moveit_planning_execution.launch">
+    <include file="$(find ur5)/launch/ur5_moveit_planning_execution.launch">
         <param name="limited" value="true"/>
         <param name="robot_ip" value="$(arg ur5_ip)"/>
     </include>
-    <include file="$(find ur5_moveit_config)/launch/moveit_rviz.launch">
+    <include file="$(find ur5)/launch/moveit_rviz.launch">
         <param name="config" value="true"/>
         <param name="robot_ip" value="$(arg ur5_ip)"/>
     </include>

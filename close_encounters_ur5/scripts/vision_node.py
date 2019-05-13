@@ -172,4 +172,4 @@ if __name__ == '__main__':
         cv2.destroyAllWindows()
 
     except rospy.ROSInterruptException:
-        pass
+        faceRecognition.shutdown()

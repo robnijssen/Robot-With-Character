@@ -28,7 +28,7 @@ class Constants:
 
 class Variables:
     # a variable to keep track of what state the control is in
-    reactCmd_state = 1
+    cmd_state = 1
     # a variable to keep track if a person is detected
     person_detected = False
     # a variable to keep track if the bot won or lost
@@ -36,19 +36,19 @@ class Variables:
     # a variable to keep track if cheating was a success
     success = False
     # a variable to keep track if the wiggle is complete
-    reactFb_happy_reaction = False
+    fb_happy_reaction = False
     # a variable to keep track of how far away the face is
-    reactDistance_to_face = 0
+    distance_to_face = 0
 
 # functions used in state machine
 
 class Callbacks:
     def state(self, state):
-        reactVariables.reactCmd_state = state.data
+        reactVariables.cmd_state = state.data
     def happy(self, happy):
-        reactVariables.reactFb_happy_reaction = happy.data
-    def reactDistance_to_face(self, distance):
-        reactVariables.reactDistance_to_face = distance.data
+        reactVariables.fb_happy_reaction = happy.data
+    def distance_to_face(self, distance):
+        reactVariables.distance_to_face = distance.data
     def score(self, won):
         if won == 0:
             reactVariables.won = False
@@ -74,7 +74,7 @@ class Idle(State):
         fb_react_publisher.publish(0)
         rospy.sleep(reactConstants.sleeptime)
     def next(self):
-        if(reactVariables.reactCmd_state == 3):
+        if(reactVariables.cmd_state == 3):
             return ReactMachine.check
         else:
             return ReactMachine.idle
@@ -89,10 +89,10 @@ class Check(State):
         reactVariables.person_detected = False
         '''
         while not variables.fb_check_for_people_done == 1:
-            if variables.reactDistance_to_face > 0:
+            if variables.distance_to_face > 0:
                 variables.person_detected = True
         '''
-        if reactVariables.reactDistance_to_face > 0:
+        if reactVariables.distance_to_face > 0:
             reactVariables.person_detected = True
         '''
         # for debugging, y=person n=no_person
@@ -135,9 +135,12 @@ class ReactDissappointed(State):
         cmd_react_publisher.publish(2)
         rospy.sleep(reactConstants.sleeptime)
     def next(self):
-        rospy.sleep(reactConstants.debugtime)
-        fb_react_publisher.publish(2)
-        rospy.sleep(reactConstants.sleeptime)
+        # publish done with reaction move
+        if reactVariables.person_detected == True:
+            fb_react_publisher.publish(1)
+        else:
+            fb_react_publisher.publish(2)
+        rospy.sleep(2 * reactConstants.sleeptime)
         return ReactMachine.idle
 
 class ReactHappy(State):
@@ -148,7 +151,7 @@ class ReactHappy(State):
         cmd_react_publisher.publish(3)
         rospy.sleep(reactConstants.sleeptime)
     def next(self):
-        if reactVariables.reactFb_happy_reaction == True:
+        if reactVariables.fb_happy_reaction == True:
             # publish done with reaction move
             if reactVariables.person_detected == True:
                 fb_react_publisher.publish(1)
@@ -219,10 +222,11 @@ if __name__ == '__main__':
         # init /fb_react publisher to give feedback to the main control
         fb_react_publisher = rospy.Publisher('/fb_react', Int8, queue_size=1)
 
-        # init subscribers
         reactVariables = Variables()
         reactCallbacks = Callbacks()
         reactConstants = Constants()
+
+        # init subscribers
         reactCmd_state = rospy.Subscriber("/cmd_state", Int8, reactCallbacks.state)
         reactFb_happy_reaction = rospy.Subscriber("/fb_happy_reaction", Int8, reactCallbacks.happy)
         reactDistance_to_face = rospy.Subscriber("/vision_face_d", Int8, reactCallbacks.distance_to_face)

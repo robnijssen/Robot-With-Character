@@ -5,7 +5,8 @@ This contains state machine structure in python files, launch files for launchin
 dependancies:
 https://github.com/ros-industrial/ur_modern_driver.git
 https://github.com/ros-industrial/universal_robot.git
-ur5 from https://github.com/robnijssen/Close-Encounters-Robot-arm-with-Character.git
-https://github.com/RoboHubEindhoven/ur3_ros_assignment_2.git <--one file needed: ur_hardware_interface.cpp
+ur5 from either
+    https://github.com/robnijssen/Close-Encounters-Robot-arm-with-Character.git
+    https://github.com/robnijssen/Robot-With-Character.git
 
-overwrite ur_hardware_interface.cpp from ur3_ros_assignment2 to ur_modern_driver/src
+overwrite the files ur_hardware_interface.cpp and ur_ros_wrapper.cpp from this folder to ur_modern_driver/src

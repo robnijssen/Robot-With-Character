@@ -32,15 +32,15 @@ class Variables:
     # a variable to keep track if a person is detected
     person_detected = False
     # a variable to keep track of how far away the face is
-    inviteDistance_to_face = 0
+    distance_to_face = 0
 
 # functions used in state machine
 
 class Callbacks:
     def state(self, state):
-        inviteVariables.inviteCmd_state = state.data
-    def inviteDistance_to_face(self, distance):
-        inviteVariables.inviteDistance_to_face = distance.data
+        inviteVariables.cmd_state = state.data
+    def distance_to_face(self, distance):
+        inviteVariables.distance_to_face = distance.data
 
 # state machine
 
@@ -72,11 +72,11 @@ class CheckForPeople(State):
     def mainRun(self):
         rospy.sleep(inviteConstants.debugtime)
         # check for people executed here
-        self.inviteDistance = inviteVariables.inviteDistance_to_face
-        if self.inviteDistance == 2:
+        self.distance = inviteVariables.distance_to_face
+        if self.distance == 2:
             # person within 2 meters
             fb_invite_publisher.publish(0)
-        elif self.inviteDistance == 1:
+        elif self.distance == 1:
             # person within 1 meter
             fb_invite_publisher.publish(1)
         else:
