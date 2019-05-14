@@ -39,24 +39,24 @@ class Variables:
 
 class Callbacks:
     def set_face_position(self, position):
-        memoryVariables.face_position.angle_0 = position.angle_0[0]
-        memoryVariables.face_position.angle_1 = position.angle_1[1]
-        memoryVariables.face_position.angle_2 = position.angle_2[2]
-        memoryVariables.face_position.angle_3 = position.angle_3[3]
-        memoryVariables.face_position.angle_4 = position.angle_4[4]
-        memoryVariables.face_position.angle_5 = position.angle_5[5]
+        memoryVariables.face_position.angle_0 = position.angle_0
+        memoryVariables.face_position.angle_1 = position.angle_1
+        memoryVariables.face_position.angle_2 = position.angle_2
+        memoryVariables.face_position.angle_3 = position.angle_3
+        memoryVariables.face_position.angle_4 = position.angle_4
+        memoryVariables.face_position.angle_5 = position.angle_5
         res = SetJointValuesResponse()
         res.feedback = True
         return res
     def get_face_position(self, _):
         return memoryVariables.face_position
     def set_cup_position(self, position):
-        memoryVariables.cup_position.angle_0 = position.angle_0[0]
-        memoryVariables.cup_position.angle_1 = position.angle_1[1]
-        memoryVariables.cup_position.angle_2 = position.angle_2[2]
-        memoryVariables.cup_position.angle_3 = position.angle_3[3]
-        memoryVariables.cup_position.angle_4 = position.angle_4[4]
-        memoryVariables.cup_position.angle_5 = position.angle_5[5]
+        memoryVariables.cup_position.angle_0 = position.angle_0
+        memoryVariables.cup_position.angle_1 = position.angle_1
+        memoryVariables.cup_position.angle_2 = position.angle_2
+        memoryVariables.cup_position.angle_3 = position.angle_3
+        memoryVariables.cup_position.angle_4 = position.angle_4
+        memoryVariables.cup_position.angle_5 = position.angle_5
         res = SetJointValuesResponse()
         res.feedback = True
         return res

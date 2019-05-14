@@ -15,16 +15,11 @@ This program is to test what joint responds to what exactly.
 # constants and variables used in state machine
 
 class Constants:
-    # multipliers for the correction joint values
-    x_multiplier_0 = 0.003
-    x_multiplier_4 = 0.007
-    y_multiplier_1 = 0.003
-    y_multiplier_3 = 0.007
     # starting joint values
     start_joint_values = [-2.2711683902660402, -1.0178875713292797, -2.5750410798412053, 0.5520000038105956, -4.749878720248225, -3.159967983084798]
-    #end_joint_values = [-2.2938314119922083, -1.116389576588766, -2.527221981679098, 0.5780388116836548, -4.732337776814596, -3.170588795338766]
-    end_joint_values = start_joint_values
-    end_joint_values[4] += 1
+    # instead of creating a reference, create a copy (by adding list())
+    end_joint_values = list(start_joint_values)
+    end_joint_values[4] += 0.4
 
 def go_to_joint_values(goal_joint_values):
     # compute a plan to get these joint values

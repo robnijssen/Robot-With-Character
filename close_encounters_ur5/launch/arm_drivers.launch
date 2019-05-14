@@ -2,9 +2,9 @@
     <!-- tcp connection group -->
     <arg name="ur5_ip" default="192.168.66.3" />
     <!-- files included here:
-        roslaunch ur_modern_driver ur5_bringup.launch robot_ip:=192.168.66.3
-        roslaunch ur5_moveit_config ur5_moveit_planning_execution.launch limited:=true robot_ip:=192.168.66.3
-        roslaunch ur5_moveit_config moveit_rviz.launch config:=true robot_ip:=192.168.66.3
+        roslaunch ur5 ur5_bringup.launch robot_ip:=192.168.66.3
+        roslaunch ur5 ur5_moveit_planning_execution.launch limited:=true robot_ip:=192.168.66.3
+        roslaunch ur5 moveit_rviz.launch config:=true robot_ip:=192.168.66.3
     -->
     <include file="$(find ur5)/launch/ur5_bringup.launch">
         <param name="robot_ip" value="$(arg ur5_ip)"/>

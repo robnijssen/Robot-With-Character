@@ -165,7 +165,7 @@ include_directories(
 ## Mark executable scripts (Python etc.) for installation
 ## in contrast to setup.py, you can choose the destination
 install(PROGRAMS
-  scripts/function_emosional_happy_wiggle.py
+  scripts/function_emotional_happy_wiggle.py
   scripts/function_emotional_track_face.py
   scripts/function_functional_check_for_face.py
   scripts/function_functional_pick_dice.py

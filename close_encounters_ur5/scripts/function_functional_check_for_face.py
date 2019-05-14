@@ -38,7 +38,9 @@ class Constants:
     middle_joint_values = [-2.315057341252462, -1.1454232374774378, -2.5245259443866175, 0.5526210069656372, -4.67750066915621, -3.170588795338766]
     left_joint_values = [-2.1855948607074183, -1.1591671148883265, -2.5244303385363978, 0.552585244178772, -4.098508659993307, -3.170588795338766]
     right_joint_values = [-2.411642853413717, -1.1589997450457972, -2.523783270512716, 0.552597165107727, -5.275455776845114, -3.170588795338766]
-    
+    # create a request so less lines are needed when calling a GetJointValues service
+    get_request = GetJointValuesRequest()
+    get_request = True
     
 class Variables:
     # a variable to keep track of what state the idle is in
@@ -56,6 +58,18 @@ class Callbacks:
     def timer_end(self, random_data):
         checkForFaceVariables.timer_ended = True
 
+class Functions:
+    def check_for_face_angles(self):
+        if checkForFaceVariables.face_d > 0:
+            # save the variables
+            req_list = checkForFaceGroup.get_current_joint_values()
+            # go to the position where the person was last spotted
+            checkForFaceGroup.set_joint_value_target(req_list)
+            checkForFaceGroup.go(wait=False)
+            # send the values to the position memory
+            req_srv = SetJointValuesRequest()
+            req_srv.angle_0, req_srv.angle_1, req_srv.angle_2, req_srv.angle_3, req_srv.angle_4, req_srv.angle_5 = req_list
+
 # state machine
 
 class CheckMachine(StateMachine):
@@ -68,6 +82,12 @@ class CheckMachine(StateMachine):
 class Idle(State):
     def transitionRun(self):
         rospy.loginfo("CheckForFace: Not active.")
+        # stop residual movement
+        checkForFaceGroup.stop()
+        checkForFaceGroup.clear_pose_targets()
+        # publish done with moving
+        fb_check_for_face_publisher.publish(1)
+        rospy.sleep(checkForFaceConstants.sleeptime)
     def mainRun(self):
         # publish that the move is not done
         fb_check_for_face_publisher.publish(0)
@@ -82,28 +102,16 @@ class GoToStartPosition(State):
     def transitionRun(self):
         rospy.loginfo("CheckForFace: Trying to go to the start position.")
         # set max speed&acceleration
-        group.set_max_velocity_scaling_factor(checkForFaceConstants.max_speed)
-        group.set_max_acceleration_scaling_factor(checkForFaceConstants.max_acceleration)
-    def mainRun(self):
+        checkForFaceGroup.set_max_velocity_scaling_factor(checkForFaceConstants.max_speed)
+        checkForFaceGroup.set_max_acceleration_scaling_factor(checkForFaceConstants.max_acceleration)
+        # check where the face was last spotted, to use that as a starting position
+        res_srv = GetJointValuesResponse()
+        res_srv = checkForFaceGetDefaultJointAngles(checkForFaceConstants.get_request)
+        res_list = [res_srv.angle_0, res_srv.angle_1, res_srv.angle_2, res_srv.angle_3, res_srv.angle_4, res_srv.angle_5]
         # compute a plan to get these joint values
-        group.set_joint_value_target(checkForFaceConstants.middle_joint_values)
-        # go to the planned position
-        group.go(wait=True)
-        group.stop()
-        group.clear_pose_targets()
-    def next(self):
-        if checkForFaceVariables.cmd_idle == 1:
-            return CheckMachine.left
-        else:
-            return CheckMachine.idle
-
-class Left(State):
-    def transitionRun(self):
-        rospy.loginfo("CheckForFace: Trying to find a face. Looking left.")
-        # compute a plan to get these joint values
-        group.set_joint_value_target(checkForFaceConstants.left_joint_values)
+        checkForFaceGroup.set_joint_value_target(res_list)
         # go to the planned position, but don't wait for the end
-        group.go(wait=False)
+        checkForFaceGroup.go(wait=False)
         # when the timer has passed, the callback will be called, triggering the next state
         #rospy.Time.now()
         rospy.Timer(rospy.Duration(checkForFaceConstants.move_time), 
@@ -112,25 +120,56 @@ class Left(State):
         # reset the timer_ended variable
         checkForFaceVariables.timer_ended = False
     def mainRun(self):
+        # check if there is a face, and if there is update the memory and go there
+        checkForFaceFunctions.check_for_face_angles()
         rospy.sleep(checkForFaceConstants.sleeptime)
     def next(self):
         if checkForFaceVariables.cmd_idle == 1:
             if checkForFaceVariables.timer_ended == True:
-                group.clear_pose_targets()
+                checkForFaceGroup.clear_pose_targets()
+                return CheckMachine.left
+            else:
+                return CheckMachine.goToStartPosition
+        else:
+            checkForFaceGroup.stop()
+            return CheckMachine.idle
+
+class Left(State):
+    def transitionRun(self):
+        rospy.loginfo("CheckForFace: Trying to find a face. Looking left.")
+        # compute a plan to get these joint values
+        checkForFaceGroup.set_joint_value_target(checkForFaceConstants.left_joint_values)
+        # go to the planned position, but don't wait for the end
+        checkForFaceGroup.go(wait=False)
+        # when the timer has passed, the callback will be called, triggering the next state
+        #rospy.Time.now()
+        rospy.Timer(rospy.Duration(checkForFaceConstants.move_time), 
+            checkForFaceCallbacks.timer_end,
+            oneshot=True)
+        # reset the timer_ended variable
+        checkForFaceVariables.timer_ended = False
+    def mainRun(self):
+        # check if there is a face, and if there is update the memory and go there
+        checkForFaceFunctions.check_for_face_angles()
+        rospy.sleep(checkForFaceConstants.sleeptime)
+    def next(self):
+        if checkForFaceVariables.cmd_idle == 1:
+            if checkForFaceVariables.timer_ended == True:
+                checkForFaceGroup.clear_pose_targets()
                 return CheckMachine.right
             else:
                 return CheckMachine.left
         else:
-            group.stop()
+            checkForFaceGroup.stop()
             return CheckMachine.idle
 
 class Right(State):
     def transitionRun(self):
         rospy.loginfo("CheckForFace: Trying to find a face. Looking right.")
         # compute a plan to get these joint values
-        group.set_joint_value_target(checkForFaceConstants.right_joint_values)
+        checkForFaceGroup.set_joint_value_target(checkForFaceConstants.right_joint_values)
         # go to the planned position, but don't wait for the end
-        group.go(wait=False)
+        checkForFaceGroup.go(wait=False)
         # when the timer has passed, the callback will be called, triggering the next state
         rospy.Timer(rospy.Duration(checkForFaceConstants.move_time), 
             checkForFaceCallbacks.timer_end,
@@ -138,25 +177,27 @@ class Right(State):
         # reset the timer_ended variable
         checkForFaceVariables.timer_ended = False
     def mainRun(self):
+        # check if there is a face, and if there is update the memory and go there
+        checkForFaceFunctions.check_for_face_angles()
         rospy.sleep(checkForFaceConstants.sleeptime)
     def next(self):
         if checkForFaceVariables.cmd_idle == 1:
             if checkForFaceVariables.timer_ended == True:
-                group.clear_pose_targets()
+                checkForFaceGroup.clear_pose_targets()
                 return CheckMachine.end
             else:
                 return CheckMachine.right
         else:
-            group.stop()
+            checkForFaceGroup.stop()
             return CheckMachine.idle
 
 class End(State):
     def transitionRun(self):
         rospy.loginfo("CheckForFace: Trying to find a face. Centering.")
         # compute a plan to get these joint values
-        group.set_joint_value_target(checkForFaceConstants.middle_joint_values)
+        checkForFaceGroup.set_joint_value_target(checkForFaceConstants.middle_joint_values)
         # go to the planned position, but don't wait for the end
-        group.go(wait=False)
+        checkForFaceGroup.go(wait=False)
         # when the timer has passed, the callback will be called, triggering the next state
         rospy.Timer(rospy.Duration(checkForFaceConstants.move_time), 
             checkForFaceCallbacks.timer_end,
@@ -164,18 +205,13 @@ class End(State):
         # reset the timer_ended variable
         checkForFaceVariables.timer_ended = False
     def mainRun(self):
-        if checkForFaceVariables.timer_ended == True:
-            # stop residual movement
-            group.stop()
-            group.clear_pose_targets()
-            # publish done with moving
-            fb_check_for_face_publisher.publish(1)
-        rospy.sleep(checkForFaceConstants.sleeptime)
+        # check if there is a face, and if there is update the memory and go there
+        checkForFaceFunctions.check_for_face_angles()
     def next(self):
         if checkForFaceVariables.cmd_idle == 1 and checkForFaceVariables.timer_ended == False:
             return CheckMachine.end
         else:
-            group.stop()
+            checkForFaceGroup.stop()
             return CheckMachine.idle
 
 if __name__ == '__main__':
@@ -186,7 +222,7 @@ if __name__ == '__main__':
 
         # start moveit
         moveit_commander.roscpp_initialize(sys.argv)
-        group = moveit_commander.MoveGroupCommander("manipulator")
+        checkForFaceGroup = moveit_commander.MoveGroupCommander("manipulator")
 
         # init publisher for the gripper
         #gripper_command = GripperCommand()
@@ -197,6 +233,7 @@ if __name__ == '__main__':
         checkForFaceConstants = Constants()
         checkForFaceVariables = Variables()
         checkForFaceCallbacks = Callbacks()
+        checkForFaceFunctions = Functions()
 
         # init subscribers
         cmd_idle = rospy.Subscriber("/cmd_idle", Int8, checkForFaceCallbacks.idle)
@@ -204,9 +241,11 @@ if __name__ == '__main__':
         
         # init face position services from the position server
         rospy.wait_for_service('/set_face_position')
-        happyWiggleGetFaceJointAngles = rospy.ServiceProxy('/set_face_position', SetJointValues)
+        checkForFaceSetFaceJointAngles = rospy.ServiceProxy('/set_face_position', SetJointValues)
         rospy.wait_for_service('/get_face_position')
-        happyWiggleGetFaceJointAngles = rospy.ServiceProxy('/get_face_position', GetJointValues)
+        checkForFaceGetFaceJointAngles = rospy.ServiceProxy('/get_face_position', GetJointValues)
+        rospy.wait_for_service('/get_default_position')
+        checkForFaceGetDefaultJointAngles = rospy.ServiceProxy('/get_default_position', GetJointValues)
 
         # instantiate state machine
         #<statemachine_name>.<state_without_capital_letter> = <state_class_name>()
