@@ -22,7 +22,7 @@ As long as nobody is close to play with, it will try to entertain itself.
 
 class Constants:
     # sleep between state checks
-    sleeptime = 0.3
+    sleeptime = 0.1
     # for debugging, play alone delay time
     debugtime = 5
     # time to track before checking around again

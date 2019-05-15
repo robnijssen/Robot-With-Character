@@ -63,6 +63,7 @@ add_service_files(
   FILES
   SetJointValues.srv
   GetJointValues.srv
+  SendGoal.srv
 )
 
 ## Generate actions in the 'action' folder

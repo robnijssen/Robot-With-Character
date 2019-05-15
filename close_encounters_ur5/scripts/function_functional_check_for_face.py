@@ -25,7 +25,7 @@ It will look around to find a face.
 
 class Constants:
     # sleep between state checks
-    sleeptime = 0.3
+    sleeptime = 0.1
     # wait a certain time between planning the moves
     move_time = 5
     # resolution of the camera to decide where the center is
@@ -69,6 +69,7 @@ class Functions:
             # send the values to the position memory
             req_srv = SetJointValuesRequest()
             req_srv.angle_0, req_srv.angle_1, req_srv.angle_2, req_srv.angle_3, req_srv.angle_4, req_srv.angle_5 = req_list
+            checkForFaceSetFaceJointAngles(req_srv)
 
 # state machine
 
@@ -137,6 +138,9 @@ class GoToStartPosition(State):
 class Left(State):
     def transitionRun(self):
         rospy.loginfo("CheckForFace: Trying to find a face. Looking left.")
+        # set max speed&acceleration
+        checkForFaceGroup.set_max_velocity_scaling_factor(checkForFaceConstants.max_speed)
+        checkForFaceGroup.set_max_acceleration_scaling_factor(checkForFaceConstants.max_acceleration)
         # compute a plan to get these joint values
         checkForFaceGroup.set_joint_value_target(checkForFaceConstants.left_joint_values)
         # go to the planned position, but don't wait for the end
@@ -166,6 +170,9 @@ class Left(State):
 class Right(State):
     def transitionRun(self):
         rospy.loginfo("CheckForFace: Trying to find a face. Looking right.")
+        # set max speed&acceleration
+        checkForFaceGroup.set_max_velocity_scaling_factor(checkForFaceConstants.max_speed)
+        checkForFaceGroup.set_max_acceleration_scaling_factor(checkForFaceConstants.max_acceleration)
         # compute a plan to get these joint values
         checkForFaceGroup.set_joint_value_target(checkForFaceConstants.right_joint_values)
         # go to the planned position, but don't wait for the end
@@ -194,6 +201,9 @@ class Right(State):
 class End(State):
     def transitionRun(self):
         rospy.loginfo("CheckForFace: Trying to find a face. Centering.")
+        # set max speed&acceleration
+        checkForFaceGroup.set_max_velocity_scaling_factor(checkForFaceConstants.max_speed)
+        checkForFaceGroup.set_max_acceleration_scaling_factor(checkForFaceConstants.max_acceleration)
         # compute a plan to get these joint values
         checkForFaceGroup.set_joint_value_target(checkForFaceConstants.middle_joint_values)
         # go to the planned position, but don't wait for the end
