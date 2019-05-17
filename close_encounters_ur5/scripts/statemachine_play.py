@@ -10,6 +10,9 @@ from state_machine import StateMachineBlueprint as StateMachine
 from state_machine import StateBlueprint as State
 from random import randint
 from std_msgs.msg import Int8
+from close_encounters_ur5.srv import SendGoal, SendGoalRequest, SendGoalResponse
+from close_encounters_ur5.srv import SetVisionMode, SetVisionModeRequest, SetVisionModeResponse
+from close_encounters_ur5.msg import AnglesList
 
 """
 This stays in idle, till it's commanded to do something by the /cmd_state
@@ -27,10 +30,16 @@ class Constants:
     debugtime = 3
     # number of total turns (best out of 3 is max 6 turns)
     max_turns = 6
+    # movement values
+    general_max_speed = 0.1
+    general_max_acceleration = 0.1
+    tolerance = 0.001
 
 class Variables:
     # a variable to keep track of what state the control is in
     cmd_state = 1
+    # feedback from the move queue
+    fb_move_queue = 0
     # a variable to keep track if the board is set up or not
     board_set_up = False
     # a variable to keep track if a person is detected
@@ -38,18 +47,25 @@ class Variables:
     # a variable to keep track of the turns
     turn_number = 0
     # a variable to keep track of how far away the face is
-    distance_to_face = 0
+    distance_to_face = -1
     # score variables
     fb_player_score = 0
     fb_bot_score = 0
     player_total_score = 0
     bot_total_score = 0
+    # prepare request for vision node
+    vision_request = SetVisionModeRequest()
+    # last known face position's joint values
+    face_joint_angles = AnglesList()
+    face_joint_angles.angles = [-2.315057341252462, -1.1454232374774378, -2.5245259443866175, 0.5526210069656372, -4.67750066915621, -3.170588795338766]
 
 # functions used in state machine
 
 class Callbacks:
     def state(self, state):
         playVariables.cmd_state = state.data
+    def fb_move_queue(self, feedback):
+        playVariables.fb_move_queue = feedback.data
     def distance_to_face(self, distance):
         playVariables.distance_to_face = distance.data
     def vision_score(self, score):
@@ -57,6 +73,8 @@ class Callbacks:
             playVariables.fb_player_score = score.data
         else:
             playVariables.fb_bot_score = score.data
+    def face_angles_update(self, angles):
+        playVariables.face_joint_angles.angles = angles.angles
 
 # state machine
 
@@ -111,6 +129,10 @@ class Check(State):
                 # to do: implement tie and replaying the round
                 # for now, this is counted as a bot win
                 playVariables.bot_total_score += 1
+        # tell vision node to look for a face
+        playVariables.vision_request.mode = 1
+        playVisionChecks(playVariables.vision_request)
+        rospy.sleep(playConstants.sleeptime)
     def mainRun(self):
         # do checks
         playVariables.person_detected = False
@@ -138,6 +160,9 @@ class Check(State):
                 rospy.logfatal(fatal)
                 return PlayMachine.idle
         else:
+            # tell vision node to stop looking for a face
+            playVariables.vision_request.mode = 0
+            playVisionChecks(playVariables.vision_request)
             if playVariables.player_total_score == 2:
                 # player won
                 fb_play_publisher.publish(2)
@@ -217,10 +242,20 @@ if __name__ == '__main__':
         playCallbacks = Callbacks()
         playConstants = Constants()
 
-        # init subscriber
+        # init subscribers
         playCmd_state = rospy.Subscriber("/cmd_state", Int8, playCallbacks.state)
+        playFb_move_queue = rospy.Subscriber("/fb_move_queue", Int8, playCallbacks.fb_move_queue)
         playDistance_to_face = rospy.Subscriber("/vision_face_d", Int8, playCallbacks.distance_to_face)
+        playFace_joint_angles = rospy.Subscriber("/face_joint_angles", AnglesList, playCallbacks.face_angles_update)
         playVision_score = rospy.Subscriber("/vision_score", Int8, playCallbacks.vision_score)
+
+        # init services
+        rospy.wait_for_service('/overwrite_goals')
+        rospy.wait_for_service('/add_goal')
+        rospy.wait_for_service('/vision_checks')
+        playOverwriteGoals = rospy.ServiceProxy('/overwrite_goals', SendGoal)
+        playAddGoal = rospy.ServiceProxy('/add_goal', SendGoal)
+        playVisionChecks = rospy.ServiceProxy('/vision_checks', SetVisionMode)
 
         # instantiate state machine
         #<statemachine_name>.<state_without_capital_letter> = <state_class_name>()

@@ -1,15 +1,15 @@
 #!/usr/bin/env python
 import sys
 import rospy
-import time
-#import moveit_commander # moveit stuff
-#import moveit_msgs # moveit stuff
-#import geometry_msgs.msg
 #import gripper_command # gripper stuff
 from state_machine import StateMachineBlueprint as StateMachine
 from state_machine import StateBlueprint as State
 from random import randint
 from std_msgs.msg import Int8
+from close_encounters_ur5.srv import GetJointValues, GetJointValuesRequest, GetJointValuesResponse
+from close_encounters_ur5.srv import SendGoal, SendGoalRequest, SendGoalResponse
+from close_encounters_ur5.srv import SetVisionMode, SetVisionModeRequest, SetVisionModeResponse
+from close_encounters_ur5.msg import AnglesList
 
 """
 This stays in idle, till it's commanded to do something by the /cmd_state.
@@ -27,6 +27,15 @@ class Constants:
     debugtime = 5
     # time to track before checking around again
     #track_time = 15 # high for debugging tracker, ~ 5 for actual running
+    # check for face joint values
+    check_for_face_middle = [-2.315057341252462, -1.1454232374774378, -2.5245259443866175, 0.5526210069656372, -4.67750066915621, -3.170588795338766]
+    check_for_face_left = [-2.1855948607074183, -1.1591671148883265, -2.5244303385363978, 0.552585244178772, -4.098508659993307, -3.170588795338766]
+    check_for_face_right = [-2.411642853413717, -1.1589997450457972, -2.523783270512716, 0.552597165107727, -5.275455776845114, -3.170588795338766]
+    # max speed/acceleration
+    general_max_speed = 0.1
+    general_max_acceleration = 0.1
+    # tolerance in joints
+    tolerance = 0.0001
 
 class Variables:
     # a variable to keep track of what state the control is in
@@ -36,8 +45,15 @@ class Variables:
     # feedback if the check for people move is done
     fb_check_for_people_done = 0
     # a variable to keep track of the distance to face topic
-    distance_to_face = 0
-
+    distance_to_face = -1
+    # feedback from the move queue
+    fb_move_queue = 0
+    # last known face position's joint values
+    face_joint_angles = AnglesList()
+    face_joint_angles.angles = [-2.315057341252462, -1.1454232374774378, -2.5245259443866175, 0.5526210069656372, -4.67750066915621, -3.170588795338766]
+    # prepare request for vision node
+    vision_request = SetVisionModeRequest()
+    
 # functions used in state machine
 
 class Callbacks:
@@ -45,6 +61,10 @@ class Callbacks:
         idleVariables.cmd_state = state.data
     def fb_check_for_people_done(self, fb_done):
         idleVariables.fb_check_for_people_done = fb_done.data
+    def fb_move_queue(self, feedback):
+        idleVariables.fb_move_queue = feedback.data
+    def face_angles_update(self, angles):
+        idleVariables.face_joint_angles.angles = angles.angles
     def distance_to_face(self, distance):
         idleVariables.distance_to_face = distance.data
 
@@ -60,12 +80,11 @@ class IdleMachine(StateMachine):
 class Idle(State):
     def transitionRun(self):
         rospy.loginfo("Idle: Not active.")
-    def mainRun(self):
         rospy.sleep(idleConstants.sleeptime)
-        # publish state 0
-        cmd_idle_publisher.publish(0)
         # publish feedback 0
         fb_idle_publisher.publish(0)
+    def mainRun(self):
+        pass
     def next(self):
         if(idleVariables.cmd_state == 0):
             return IdleMachine.checkForPeople
@@ -75,17 +94,40 @@ class Idle(State):
 class CheckForPeople(State):
     def transitionRun(self):
         rospy.loginfo("Idle: Checking for people.")
-        # check for people executed here
-        cmd_idle_publisher.publish(1)
+        # reset this variable
         idleVariables.person_detected = False
+        # tell the vision node to check for faces
+        idleVariables.vision_request.mode = 1
+        idleVisionChecks(idleVariables.vision_request)
+        # produce requests for the move queue
+        request0, request1, request2, request3, request4 = SendGoalRequest(), SendGoalRequest(), SendGoalRequest(), SendGoalRequest(), SendGoalRequest()
+        request0.goal, request0.speed, request0.acceleration, request0.tolerance, request0.delay = idleVariables.face_joint_angles.angles, idleConstants.general_max_speed, idleConstants.general_max_acceleration, idleConstants.tolerance, 0.01
+        request1.goal, request1.speed, request1.acceleration, request1.tolerance, request1.delay = idleConstants.check_for_face_middle, idleConstants.general_max_speed, idleConstants.general_max_acceleration, idleConstants.tolerance, 0.01
+        request2.goal, request2.speed, request2.acceleration, request2.tolerance, request2.delay = idleConstants.check_for_face_left, idleConstants.general_max_speed, idleConstants.general_max_acceleration, idleConstants.tolerance, 5.0
+        request3.goal, request3.speed, request3.acceleration, request3.tolerance, request3.delay = idleConstants.check_for_face_right, idleConstants.general_max_speed, idleConstants.general_max_acceleration, idleConstants.tolerance, 5.0
+        request4.goal, request4.speed, request4.acceleration, request4.tolerance, request4.delay = idleConstants.check_for_face_middle, idleConstants.general_max_speed, idleConstants.general_max_acceleration, idleConstants.tolerance, 5.0
+        # send request list to the move queue
+        idleOverwriteGoals(request0)
+        idleAddGoal(request1)
+        idleAddGoal(request2)
+        idleAddGoal(request3)
+        idleAddGoal(request4)
     def mainRun(self):
         if idleVariables.distance_to_face > 0:
-            idleVariables.person_detected = True
+            idleVariables.person_detected = True 
             fb_idle_publisher.publish(1)
+            # tell the vision node to stop checking for faces
+            idleVariables.vision_request.mode = 0
+            idleVisionChecks(idleVariables.vision_request)
+            # go to face position
+            request = SendGoalRequest()
+            request.goal, request.speed, request.acceleration, request.tolerance, request.delay = idleVariables.face_joint_angles.angles, idleConstants.general_max_speed, idleConstants.general_max_acceleration, idleConstants.tolerance, 0.01
+            idleOverwriteGoals(request)
         rospy.sleep(idleConstants.sleeptime)
     def next(self):
         if idleVariables.person_detected == False:
-            if idleVariables.fb_check_for_people_done == False:
+            if idleVariables.fb_move_queue < 5:
+                # keep going till the fifth move is complete
                 return IdleMachine.checkForPeople
             elif idleVariables.distance_to_face == 0:
                 return IdleMachine.followPeople
@@ -102,7 +144,6 @@ class FollowPeople(State):
     def transitionRun(self):
         rospy.loginfo("Idle: Following people for a bit")
     def mainRun(self):
-        cmd_idle_publisher.publish(2)
         rospy.sleep(idleConstants.sleeptime)
     def next(self):
         if idleVariables.distance_to_face > 0:
@@ -119,7 +160,6 @@ class PlayAlone(State):
         rospy.loginfo("Idle: Playing by myself for a bit")
     def mainRun(self):
         # to do: add the playing by myself move here
-        cmd_idle_publisher.publish(0)
         # wait for a bit
         rospy.sleep(idleConstants.debugtime)
     def next(self):
@@ -131,15 +171,8 @@ if __name__ == '__main__':
         rospy.init_node('statemachine_idle_node', anonymous=True)
         rospy.loginfo("idle actions node starting")
 
-        # start moveit
-        #moveit_commander.roscpp_initialize(sys.argv)
-        #group = moveit_commander.MoveGroupCommander("manipulator")
-
         # init publisher for the gripper
         #gripper_command = GripperCommand()
-
-        # init /cmd_idle publisher
-        cmd_idle_publisher = rospy.Publisher('/cmd_idle', Int8, queue_size=1)
 
         # init /fb_idle publisher to give feedback to the main control
         fb_idle_publisher = rospy.Publisher('/fb_idle', Int8, queue_size=1)
@@ -150,9 +183,19 @@ if __name__ == '__main__':
 
         # init subscribers
         idleCmd_state = rospy.Subscriber("/cmd_state", Int8, idleCallbacks.state)
-        idleFb_check_for_people = rospy.Subscriber("/fb_check_for_people", Int8, idleCallbacks.fb_check_for_people_done)
+        idleFb_move_queue = rospy.Subscriber("/fb_move_queue", Int8, idleCallbacks.fb_move_queue)
         idleDistance_to_face = rospy.Subscriber("/vision_face_d", Int8, idleCallbacks.distance_to_face)
-        
+        idleFace_joint_angles = rospy.Subscriber("/face_joint_angles", AnglesList, idleCallbacks.face_angles_update)
+        idleFb_check_for_people = rospy.Subscriber("/fb_check_for_people", Int8, idleCallbacks.fb_check_for_people_done)
+
+        # init services
+        rospy.wait_for_service('/overwrite_goals')
+        rospy.wait_for_service('/add_goal')
+        rospy.wait_for_service('/vision_checks')
+        idleOverwriteGoals = rospy.ServiceProxy('/overwrite_goals', SendGoal)
+        idleAddGoal = rospy.ServiceProxy('/add_goal', SendGoal)
+        idleVisionChecks = rospy.ServiceProxy('/vision_checks', SetVisionMode)
+
         # instantiate state machine
         #<statemachine_name>.<state_without_capital_letter> = <state_class_name>()
         IdleMachine.idle = Idle()

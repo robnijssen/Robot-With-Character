@@ -52,11 +52,10 @@ find_package(ur5 REQUIRED)
 ##   * add every package in MSG_DEP_SET to generate_messages(DEPENDENCIES ...)
 
 ## Generate messages in the 'msg' folder
-# add_message_files(
-#   FILES
-#   Message1.msg
-#   Message2.msg
-# )
+add_message_files(
+  FILES
+  AnglesList.msg
+)
 
 # Generate services in the 'srv' folder
 add_service_files(
@@ -64,6 +63,8 @@ add_service_files(
   SetJointValues.srv
   GetJointValues.srv
   SendGoal.srv
+  SetPosition.srv
+  SetVisionMode.srv
 )
 
 ## Generate actions in the 'action' folder

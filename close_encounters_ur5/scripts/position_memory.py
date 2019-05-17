@@ -2,68 +2,36 @@
 import sys
 import rospy
 # import service types
-from close_encounters_ur5.srv import SetJointValues, SetJointValuesResponse, GetJointValues, GetJointValuesResponse
-
+from close_encounters_ur5.srv import SetJointValues, SetJointValuesResponse, GetJointValues, GetJointValuesRequest, GetJointValuesResponse
+from close_encounters_ur5.msg import AnglesList
 """
 This server will just wait and respond to requests from the other nodes.
 """
 
 class Constants:
-    # default position's joint values
-    default_joint_values_input = [-2.315057341252462, -1.1454232374774378, -2.5245259443866175, 0.5526210069656372, -4.67750066915621, -3.170588795338766]
-    # prepare default position for the service
-    default_joint_values = GetJointValuesResponse()
-    default_joint_values.angle_0 = default_joint_values_input[0]
-    default_joint_values.angle_1 = default_joint_values_input[1]
-    default_joint_values.angle_2 = default_joint_values_input[2]
-    default_joint_values.angle_3 = default_joint_values_input[3]
-    default_joint_values.angle_4 = default_joint_values_input[4]
-    default_joint_values.angle_5 = default_joint_values_input[5]
+    # default position's joint angles
+    default_angles = AnglesList()
+    default_angles.angles = [-2.315057341252462, -1.1454232374774378, -2.5245259443866175, 0.5526210069656372, -4.67750066915621, -3.170588795338766]
+    # response ready for SetJointValues services
+    res = SetJointValuesResponse()
+    res.feedback = True
     
 class Variables:
-    # prepare face and cup positions for the service
-    face_position = GetJointValuesResponse()
-    face_position.angle_0 = Constants().default_joint_values_input[0]
-    face_position.angle_1 = Constants().default_joint_values_input[1]
-    face_position.angle_2 = Constants().default_joint_values_input[2]
-    face_position.angle_3 = Constants().default_joint_values_input[3]
-    face_position.angle_4 = Constants().default_joint_values_input[4]
-    face_position.angle_5 = Constants().default_joint_values_input[5]
-    cup_position = GetJointValuesResponse()
-    cup_position.angle_0 = Constants().default_joint_values_input[0]
-    cup_position.angle_1 = Constants().default_joint_values_input[1]
-    cup_position.angle_2 = Constants().default_joint_values_input[2]
-    cup_position.angle_3 = Constants().default_joint_values_input[3]
-    cup_position.angle_4 = Constants().default_joint_values_input[4]
-    cup_position.angle_5 = Constants().default_joint_values_input[5]
+    # face and cup positions (default)
+    face_angles = AnglesList()
+    face_angles.angles = list(Constants().default_angles.angles)
+    cup_angles = AnglesList()
+    cup_angles.angles = list(Constants().default_angles.angles)
 
 class Callbacks:
-    def set_face_position(self, position):
-        memoryVariables.face_position.angle_0 = position.angle_0
-        memoryVariables.face_position.angle_1 = position.angle_1
-        memoryVariables.face_position.angle_2 = position.angle_2
-        memoryVariables.face_position.angle_3 = position.angle_3
-        memoryVariables.face_position.angle_4 = position.angle_4
-        memoryVariables.face_position.angle_5 = position.angle_5
-        res = SetJointValuesResponse()
-        res.feedback = True
-        return res
-    def get_face_position(self, _):
-        return memoryVariables.face_position
-    def set_cup_position(self, position):
-        memoryVariables.cup_position.angle_0 = position.angle_0
-        memoryVariables.cup_position.angle_1 = position.angle_1
-        memoryVariables.cup_position.angle_2 = position.angle_2
-        memoryVariables.cup_position.angle_3 = position.angle_3
-        memoryVariables.cup_position.angle_4 = position.angle_4
-        memoryVariables.cup_position.angle_5 = position.angle_5
-        res = SetJointValuesResponse()
-        res.feedback = True
-        return res
-    def get_cup_position(self, _):
-        return memoryVariables.cup_position
-    def get_default_position(self, _):
-        return memoryConstants.default_joint_values
+    def set_face_position(self, angles):
+        memoryVariables.face_angles.angles = angles.angles
+        face_joint_angles_publisher.publish(memoryVariables.face_angles)
+        return memoryConstants.res
+    def set_cup_position(self, angles):
+        memoryVariables.cup_angles.angles = angles.angles
+        cup_joint_angles_publisher.publish(memoryVariables.cup_angles)
+        return memoryConstants.res
 
 if __name__ == '__main__':
     try:
@@ -76,12 +44,19 @@ if __name__ == '__main__':
         memoryCallbacks = Callbacks()
 
         # init services
-        rospy.Service('/set_face_position', SetJointValues, memoryCallbacks.set_face_position)
-        rospy.Service('/get_face_position', GetJointValues, memoryCallbacks.get_face_position)
-        rospy.Service('/set_cup_position', SetJointValues, memoryCallbacks.set_cup_position)
-        rospy.Service('/get_cup_position', GetJointValues, memoryCallbacks.get_cup_position)
-        rospy.Service('/get_default_position', GetJointValues, memoryCallbacks.get_default_position)
+        rospy.Service('/set_face_joint_angles', SetJointValues, memoryCallbacks.set_face_position)
+        rospy.Service('/set_cup_joint_angles', SetJointValues, memoryCallbacks.set_cup_position)
+
+        # init publishers
+        default_joint_angles_publisher = rospy.Publisher('/default_joint_angles', AnglesList, queue_size=1)
+        face_joint_angles_publisher = rospy.Publisher('/face_joint_angles', AnglesList, queue_size=1)
+        cup_joint_angles_publisher = rospy.Publisher('/cup_joint_angles', AnglesList, queue_size=1)
         
+        # publish the initial values
+        default_joint_angles_publisher.publish(memoryConstants.default_angles)
+        face_joint_angles_publisher.publish(memoryConstants.default_angles)
+        cup_joint_angles_publisher.publish(memoryConstants.default_angles)
+
         # sleep till shutdown (wake up to answer, then go back to sleep)
         rospy.spin()
 

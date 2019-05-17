@@ -19,7 +19,7 @@
   <!-- gripper -->
   <xacro:include filename="$(find ur5)/robotiq_description/urdf/robotiq_85_gripper.urdf.xacro" />
   <xacro:robotiq_85_gripper prefix="" parent="ee_link" >
-	<origin xyz="0.005 0 0" rpy="0 0 0" /> <!-- x must be greater than 0.004 -->
+	<origin xyz="0.005 0 0" rpy="${1.5708} 0 0" /> <!-- x must be greater than 0.004 -->
   </xacro:robotiq_85_gripper> 
 
   <!-- A ground plane -->
@@ -34,7 +34,19 @@
 	<origin xyz="-0.4 1 -0.1" rpy="${1.5708} 0 0 " />
   </xacro:base_ur5> 
 
-  
+  <!-- camerabase -->
+  <xacro:include filename="$(find ur5)/urdf/camera_mount.urdf" />
+  <xacro:camera_mount parent="ee_link" >
+	<origin xyz="${0} ${-(0.3-0.3+0.06)} 0" rpy="0 ${1.5708*2} 0" />
+<!-- change x{0} value for position -->
+  </xacro:camera_mount> 
+
+  <!-- camera -->
+  <xacro:include filename="$(find ur5)/urdf/camera.xacro" />
+  <xacro:camera parent="ee_link" >
+	<origin xyz="${-0.005+0} ${-0.09} ${-0.025}" rpy="${-1.5708} ${-1.5708} 0" />
+<!-- change x{0} value for position -->
+  </xacro:camera> 
 
   <link name="world" />
 

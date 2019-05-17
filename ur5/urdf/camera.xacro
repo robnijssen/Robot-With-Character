@@ -1,0 +1,54 @@
+<robot name="camera" xmlns:xacro="http://ros.org/wiki/xacro">
+	<xacro:macro name="camera" params="parent *origin"> 
+
+<!-- joint between camera and camera_mount -->
+	<joint name="camera_joint" type="fixed" >
+		<xacro:insert_block name="origin" />
+		<parent link="${parent}" />
+		<child link="camera" />
+	</joint>
+
+	 <link
+		  name="camera">
+		  <inertial>
+		    <origin
+		      xyz="0 0 0"
+		      rpy="0 0 0" />
+		    <mass
+		      value="100" />
+		    <inertia
+		      ixx="20000"
+		      ixy="20000"
+		      ixz="20000"
+		      iyy="20000"
+		      iyz="20000"
+		      izz="20000" />
+		  </inertial>
+		  <visual>
+		    <origin
+		      xyz="0 0 0"
+		      rpy="0 0 0" />
+		    <geometry>
+		      <mesh
+		        filename="package://ur5/meshes/logitech_webcam_c270.STL" scale="0.001 0.001 0.001" />
+		    </geometry>
+		    <material
+		      name="">
+		      <color
+		        rgba="0.150 0.150 0.150 1" />
+		    </material>
+		  </visual>
+		  <collision>
+		    <origin
+		      xyz="0 0 0"
+		      rpy="0 0 0" />
+		    <geometry>
+		      <mesh
+		        filename="package://ur5/meshes/logitech_webcam_c270.STL" scale="0.001 0.001 0.001" />
+		    </geometry>
+		  </collision>
+		</link>
+		
+		
+	</xacro:macro>
+</robot>

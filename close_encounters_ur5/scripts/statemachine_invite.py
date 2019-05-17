@@ -1,7 +1,6 @@
 #!/usr/bin/env python
 import sys
 import rospy
-import time
 #import moveit_commander # moveit stuff
 #import moveit_msgs # moveit stuff
 #import geometry_msgs.msg
@@ -10,6 +9,9 @@ from state_machine import StateMachineBlueprint as StateMachine
 from state_machine import StateBlueprint as State
 from random import randint
 from std_msgs.msg import Int8
+from close_encounters_ur5.srv import SendGoal, SendGoalRequest, SendGoalResponse
+from close_encounters_ur5.srv import SetVisionMode, SetVisionModeRequest, SetVisionModeResponse
+from close_encounters_ur5.msg import AnglesList
 
 """
 This stays in idle, till it's commanded to do something by the /cmd_state
@@ -25,6 +27,11 @@ class Constants:
     sleeptime = 0.3
     # for debugging, time between detecting a face and continuing with the next state
     debugtime = 3
+    # movement values
+    general_max_speed = 0.1
+    general_max_acceleration = 0.1
+    tolerance = 0.001
+
 
 class Variables:
     # a variable to keep track of what state the control is in
@@ -33,6 +40,11 @@ class Variables:
     person_detected = False
     # a variable to keep track of how far away the face is
     distance_to_face = 0
+    # prepare request for vision node
+    vision_request = SetVisionModeRequest()
+    # last known face position's joint values
+    face_joint_angles = AnglesList()
+    face_joint_angles.angles = [-2.315057341252462, -1.1454232374774378, -2.5245259443866175, 0.5526210069656372, -4.67750066915621, -3.170588795338766]
 
 # functions used in state machine
 
@@ -41,6 +53,8 @@ class Callbacks:
         inviteVariables.cmd_state = state.data
     def distance_to_face(self, distance):
         inviteVariables.distance_to_face = distance.data
+    def face_angles_update(self, angles):
+        inviteVariables.face_joint_angles.angles = angles.angles
 
 # state machine
 
@@ -56,8 +70,6 @@ class Idle(State):
         rospy.loginfo("Invite: Not active.")
     def mainRun(self):
         rospy.sleep(inviteConstants.sleeptime)
-        # publish state 0
-        cmd_invite_publisher.publish(0)
         # publish feedback 0 for debugging (no person within 1 meters)
         fb_invite_publisher.publish(0)
     def next(self):
@@ -69,9 +81,15 @@ class Idle(State):
 class CheckForPeople(State):
     def transitionRun(self):
         rospy.loginfo("Invite: Checking for people.")
+        request = SendGoalRequest()
+        request.goal, request.speed, request.acceleration, request.tolerance, request.delay = inviteVariables.face_joint_angles.angles, inviteConstants.general_max_speed, inviteConstants.general_max_acceleration, inviteConstants.tolerance, 0.01
+        inviteOverwriteGoals(request)
     def mainRun(self):
         rospy.sleep(inviteConstants.debugtime)
         # check for people executed here
+        inviteVariables.vision_request.mode = 1
+        inviteVisionChecks(inviteVariables.vision_request)
+        rospy.sleep(inviteConstants.sleeptime)
         self.distance = inviteVariables.distance_to_face
         if self.distance == 2:
             # person within 2 meters
@@ -82,6 +100,8 @@ class CheckForPeople(State):
         else:
             # no person within 2 meters
             fb_invite_publisher.publish(2)
+        inviteVariables.vision_request.mode = 0
+        inviteVisionChecks(inviteVariables.vision_request)
     def next(self):
         if self.distance == 2:
             return InviteMachine.inviteByLooking
@@ -112,19 +132,26 @@ if __name__ == '__main__':
         # init publisher for the gripper
         #gripper_command = GripperCommand()
 
-        # init /cmd_invite publisher
-        cmd_invite_publisher = rospy.Publisher('/cmd_invite', Int8, queue_size=1)
-
         # init /fb_invite publisher to give feedback to the main control
         fb_invite_publisher = rospy.Publisher('/fb_invite', Int8, queue_size=1)
 
-        # init subscriber
         inviteVariables = Variables()
         inviteCallbacks = Callbacks()
         inviteConstants = Constants()
+
+        # init subscribers
         inviteCmd_state = rospy.Subscriber("/cmd_state", Int8, inviteCallbacks.state)
         inviteDistance_to_face = rospy.Subscriber("/vision_face_d", Int8, inviteCallbacks.distance_to_face)
-
+        inviteFace_joint_angles = rospy.Subscriber("/face_joint_angles", AnglesList, inviteCallbacks.face_angles_update)
+        
+        # init services
+        rospy.wait_for_service('/overwrite_goals')
+        rospy.wait_for_service('/add_goal')
+        rospy.wait_for_service('/vision_checks')
+        inviteOverwriteGoals = rospy.ServiceProxy('/overwrite_goals', SendGoal)
+        inviteAddGoal = rospy.ServiceProxy('/add_goal', SendGoal)
+        inviteVisionChecks = rospy.ServiceProxy('/vision_checks', SetVisionMode)
+        
         # instantiate state machine
         #<statemachine_name>.<state_without_capital_letter> = <state_class_name>()
         InviteMachine.idle = Idle()

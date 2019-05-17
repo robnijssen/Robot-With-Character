@@ -1,39 +1,33 @@
 <launch>
 
-    <!-- main control node -->
-    <node pkg="close_encounters_ur5" type="statemachine_control.py" name="statemachine_control" output="screen"/>
-
+    <!-- state machines -->
     <group>
-        <!-- idle control node -->
+        <!-- main control node -->
+        <node pkg="close_encounters_ur5" type="statemachine_control.py" name="statemachine_control" output="screen"/>
+
+        <!-- idle node -->
         <node pkg="close_encounters_ur5" type="statemachine_idle.py" name="statemachine_idle" output="screen"/>
-        <!-- idle functions -->
-        <node pkg="close_encounters_ur5" type="function_functional_check_for_face.py" name="functional_check_for_face" output="screen"/>
-        <node pkg="close_encounters_ur5" type="function_emotional_track_face.py" name="functional_track_face" output="screen"/>
-    </group>
 
-    <group>
-        <!-- invite control node -->
+        <!-- invite node -->
         <node pkg="close_encounters_ur5" type="statemachine_invite.py" name="statemachine_invite" output="screen"/>
-        <!-- invite functions -->
-    </group>
 
-    <group>
-        <!-- play control node -->
+        <!-- play node -->
         <node pkg="close_encounters_ur5" type="statemachine_play.py" name="statemachine_play" output="screen"/>
-        <!-- play functions -->
-    </group>
 
-    <group>
-        <!-- react control node -->
+        <!-- react node -->
         <node pkg="close_encounters_ur5" type="statemachine_react.py" name="statemachine_react" output="screen"/>
-        <!-- react functions -->
-        <node pkg="close_encounters_ur5" type="function_emotional_happy_wiggle.py" name="function_emotional_happy_wiggle" output="screen"/>
     </group>
 
-    <!-- vision node -->
-    <node pkg="close_encounters_ur5" type="vision_node.py" name="vision_node" output="screen"/>
+    <!-- service nodes -->
+    <group>
+        <!-- move queue node -->
+        <node pkg="close_encounters_ur5" type="move_queue.py" name="move_queue" output="screen"/>
+        
+        <!-- vision node -->
+        <node pkg="close_encounters_ur5" type="vision_node.py" name="vision_node" output="screen"/>
 
-    <!-- memory node -->
-    <node pkg="close_encounters_ur5" type="position_memory.py" name="position_memory_node" output="screen"/>
-    
+        <!-- memory node -->
+        <node pkg="close_encounters_ur5" type="position_memory.py" name="position_memory_node" output="screen"/>
+    </group>
+
 </launch>
