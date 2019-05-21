@@ -5,6 +5,7 @@ This contains state machine structure in python files, launch files for launchin
 dependancies:
 https://github.com/ros-industrial/ur_modern_driver.git
 https://github.com/ros-industrial/universal_robot.git
+https://github.com/ros-industrial/robotiq.git
 ur5 from either
     https://github.com/robnijssen/Close-Encounters-Robot-arm-with-Character.git
     https://github.com/robnijssen/Robot-With-Character.git

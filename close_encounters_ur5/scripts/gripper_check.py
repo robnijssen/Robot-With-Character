@@ -32,7 +32,7 @@ if __name__ == '__main__':
         gripper_publisher.publish(gripper_command)
         rospy.sleep(0.2)
         rospy.loginfo("activated gripper")
-
+        
         while True:
             # open the gripper
             gripper_command.rPR = 0

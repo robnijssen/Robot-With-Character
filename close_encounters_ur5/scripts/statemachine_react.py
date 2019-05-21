@@ -14,7 +14,7 @@ from close_encounters_ur5.msg import AnglesList
 
 """
 This stays in idle, till it's commanded to do something by the /cmd_state
-This topic published on by the statemachine_control.py
+This topic is published by the statemachine_control.py
 
 After playing a game, it will try to show emotions.
 """
@@ -45,6 +45,7 @@ class Constants:
 
 class Variables:
     # a variable to keep track of what state the control is in
+    # state 5: bot won, state 6: player won
     cmd_state = 1
     # feedback from the move queue
     fb_move_queue = 0
@@ -71,6 +72,7 @@ class Variables:
 
 class Functions:
     def happy_determine_wiggle_values(self):
+        # to do: add more variants and a little random
         # calculate corrections for pitch and yaw approximation from the face position
         correction_0 = reactVariables.happy_wiggle_start[0] - reactVariables.face_joint_angles.angles[0]
         correction_1 = reactVariables.happy_wiggle_start[1] - reactVariables.face_joint_angles.angles[1]
@@ -111,11 +113,6 @@ class Callbacks:
         reactVariables.fb_move_queue = feedback.data
     def distance_to_face(self, distance):
         reactVariables.distance_to_face = distance.data
-    def score(self, won):
-        if won == 0:
-            reactVariables.won = False
-        else:
-            reactVariables.won = True
     def face_angles_update(self, angles):
         reactVariables.face_joint_angles.angles = angles.angles
 
@@ -136,58 +133,16 @@ class Idle(State):
         fb_react_publisher.publish(0)
         rospy.sleep(reactConstants.sleeptime)
     def next(self):
-        if(reactVariables.cmd_state == 3):
-            return ReactMachine.check
+        if reactVariables.cmd_state == 5:
+            return ReactMachine.reactHappy
+        elif reactVariables.cmd_state == 6:
+            return ReactMachine.reactSad
         else:
             return ReactMachine.idle
-
-class Check(State):
-    def transitionRun(self):
-        rospy.loginfo("React: Checking for people.")
-        # tell vision node to look for a face
-        reactVariables.vision_request.mode = 1
-        reactVisionChecks(reactVariables.vision_request)
-        rospy.sleep(reactConstants.sleeptime)
-    def mainRun(self):
-        # check for people
-        reactVariables.person_detected = False
-        '''
-        while not variables.fb_check_for_people_done == 1:
-            if variables.distance_to_face > 0:
-                variables.person_detected = True
-        '''
-        if reactVariables.distance_to_face > 0:
-            reactVariables.person_detected = True
-    def next(self):
-        # tell vision node to stop looking for a face
-        reactVariables.vision_request.mode = 0
-        reactVisionChecks(reactVariables.vision_request)
-        if reactVariables.person_detected == False:
-            return ReactMachine.reactDissappointed
-        elif reactVariables.won == True:
-            return ReactMachine.reactHappy
-        else:
-            return ReactMachine.reactSad
-
-class ReactDissappointed(State):
-    def transitionRun(self):
-        rospy.loginfo("React: Reacting disappointed.")
-        # to do: send disappointed move here
-    def mainRun(self):
-        rospy.sleep(reactConstants.sleeptime)
-    def next(self):
-        # publish done with reaction move
-        if reactVariables.person_detected == True:
-            fb_react_publisher.publish(1)
-        else:
-            fb_react_publisher.publish(2)
-        rospy.sleep(2 * reactConstants.sleeptime)
-        return ReactMachine.idle
 
 class ReactHappy(State):
     def transitionRun(self):
         rospy.loginfo("React: Reacting happy.")
-        # to do: add more variants and a little random
         # determine how to do the wiggle
         reactFunctions.happy_determine_wiggle_values()
         # produce requests for the move queue
@@ -207,13 +162,8 @@ class ReactHappy(State):
         rospy.sleep(reactConstants.sleeptime)
     def next(self):
         if reactVariables.fb_move_queue == 5:
-            # publish done with reaction move after 5th move is complete
-            if reactVariables.person_detected == True:
-                fb_react_publisher.publish(1)
-            else:
-                fb_react_publisher.publish(2)
-            rospy.sleep(2 * reactConstants.sleeptime)
-            return ReactMachine.idle
+            # move on with the next action after 5th move is complete
+            return ReactMachine.check
         else:
             return ReactMachine.reactHappy
 
@@ -224,13 +174,9 @@ class ReactSad(State):
     def mainRun(self):
         rospy.sleep(reactConstants.sleeptime)
     def next(self):
-        rospy.sleep(reactConstants.sleeptime)
-        if reactVariables.person_detected == True:
-            fb_react_publisher.publish(1)
-        else:
-            fb_react_publisher.publish(2)
         rospy.sleep(reactConstants.debugtime)
-        return ReactMachine.idle
+        # to do: check here if sad move is done
+        return ReactMachine.check
 
 class Cheat(State):
     def transitionRun(self):
@@ -254,6 +200,36 @@ class Cheat(State):
         else:
             return ReactMachine.reactSad
 
+class Check(State):
+    def transitionRun(self):
+        rospy.loginfo("React: Checking for people.")
+        # tell vision node to look for a face
+        reactVariables.vision_request.mode = 1
+        reactVisionChecks(reactVariables.vision_request)
+        # produce and send request for the move queue
+        request = SendGoalRequest()
+        request.goal, request.speed, request.acceleration, request.tolerance, request.delay = reactVariables.face_joint_angles, reactConstants.general_max_speed, reactConstants.general_max_acceleration, reactConstants.tolerance, reactConstants.sleeptime
+        reactOverwriteGoals(request)
+        reactVariables.person_detected = False
+    def mainRun(self):
+        if reactVariables.distance_to_face > 0:
+            reactVariables.person_detected = True
+    def next(self):
+        # tell vision node to stop looking for a face
+        reactVariables.vision_request.mode = 0
+        reactVisionChecks(reactVariables.vision_request)
+        if reactVariables.fb_move_queue == 1:
+            # publish feedback about the person when done moving
+            if reactVariables.person_detected == True:
+                fb_react_publisher.publish(1)
+            else:
+                fb_react_publisher.publish(2)
+            rospy.sleep(2 * reactConstants.sleeptime)
+            return ReactMachine.idle
+        else:
+            return ReactMachine.check
+        
+
 if __name__ == '__main__':
     try:
         # start a new node
@@ -275,7 +251,6 @@ if __name__ == '__main__':
         reactCmd_state = rospy.Subscriber("/cmd_state", Int8, reactCallbacks.state)
         reactFb_move_queue = rospy.Subscriber("/fb_move_queue", Int8, reactCallbacks.fb_move_queue)
         reactDistance_to_face = rospy.Subscriber("/vision_face_d", Int8, reactCallbacks.distance_to_face)
-        reactFinal_score = rospy.Subscriber("/final_score", Int8, reactCallbacks.score)
         reactFace_joint_angles = rospy.Subscriber("/face_joint_angles", AnglesList, reactCallbacks.face_angles_update)
 
         # init services
@@ -289,11 +264,10 @@ if __name__ == '__main__':
         # instantiate state machine
         #<statemachine_name>.<state_without_capital_letter> = <state_class_name>()
         ReactMachine.idle = Idle()
-        ReactMachine.check = Check()
-        ReactMachine.reactDissappointed = ReactDissappointed()
         ReactMachine.reactHappy = ReactHappy()
         ReactMachine.reactSad = ReactSad()
         ReactMachine.cheat = Cheat()
+        ReactMachine.check = Check()
         ReactMachine().runAll(0)
 
     except rospy.ROSInterruptException:

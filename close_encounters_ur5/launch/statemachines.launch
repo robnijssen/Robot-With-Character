@@ -11,8 +11,14 @@
         <!-- invite node -->
         <node pkg="close_encounters_ur5" type="statemachine_invite.py" name="statemachine_invite" output="screen"/>
 
-        <!-- play node -->
-        <node pkg="close_encounters_ur5" type="statemachine_play.py" name="statemachine_play" output="screen"/>
+        <!-- set up node -->
+        <node pkg="close_encounters_ur5" type="statemachine_set_up.py" name="statemachine_set_up" output="screen"/>
+
+        <!-- take turn node -->
+        <node pkg="close_encounters_ur5" type="statemachine_take_turn.py" name="statemachine_take_turn" output="screen"/>
+
+        <!-- wait for player's turn node -->
+        <node pkg="close_encounters_ur5" type="statemachine_wait_for_turn.py" name="statemachine_wait_for_turn" output="screen"/>
 
         <!-- react node -->
         <node pkg="close_encounters_ur5" type="statemachine_react.py" name="statemachine_react" output="screen"/>

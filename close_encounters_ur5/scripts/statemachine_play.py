@@ -133,9 +133,9 @@ class Check(State):
         playVariables.vision_request.mode = 1
         playVisionChecks(playVariables.vision_request)
         rospy.sleep(playConstants.sleeptime)
-    def mainRun(self):
         # do checks
         playVariables.person_detected = False
+    def mainRun(self):
         '''
         while not variables.fb_check_for_people_and_score_done == 1:
             if playVariables.distance_to_face > 0:
