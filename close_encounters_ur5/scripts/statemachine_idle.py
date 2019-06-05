@@ -47,7 +47,7 @@ class Variables:
     # a variable to keep track of the distance to face topic
     distance_to_face = -1
     # feedback from the move queue
-    fb_move_queue = 0
+    fb_move_executor = 0
     # last known face position's joint values
     face_joint_angles = AnglesList()
     face_joint_angles.angles = [-2.315057341252462, -1.1454232374774378, -2.5245259443866175, 0.5526210069656372, -4.67750066915621, -1.5051539579974573]
@@ -61,8 +61,8 @@ class Callbacks:
         idleVariables.cmd_state = state.data
     def fb_check_for_people_done(self, fb_done):
         idleVariables.fb_check_for_people_done = fb_done.data
-    def fb_move_queue(self, feedback):
-        idleVariables.fb_move_queue = feedback.data
+    def fb_move_executor(self, feedback):
+        idleVariables.fb_move_executor = feedback.data
     def face_angles_update(self, angles):
         idleVariables.face_joint_angles.angles = angles.angles
     def distance_to_face(self, distance):
@@ -115,7 +115,6 @@ class CheckForPeople(State):
     def mainRun(self):
         if idleVariables.distance_to_face > 0:
             idleVariables.person_detected = True 
-            fb_idle_publisher.publish(1)
             # tell the vision node to stop checking for faces
             idleVariables.vision_request.mode = 0
             idleVisionChecks(idleVariables.vision_request)
@@ -123,10 +122,11 @@ class CheckForPeople(State):
             request = SendGoalRequest()
             request.goal, request.speed, request.acceleration, request.tolerance, request.delay = idleVariables.face_joint_angles.angles, idleConstants.general_max_speed, idleConstants.general_max_acceleration, idleConstants.tolerance, 0.01
             idleOverwriteGoals(request)
+            fb_idle_publisher.publish(1)
         rospy.sleep(idleConstants.sleeptime)
     def next(self):
         if idleVariables.person_detected == False:
-            if idleVariables.fb_move_queue < 5:
+            if idleVariables.fb_move_executor < 5:
                 # keep going till the fifth move is complete
                 return IdleMachine.checkForPeople
             elif idleVariables.distance_to_face == 0:
@@ -183,7 +183,7 @@ if __name__ == '__main__':
 
         # init subscribers
         idleCmd_state = rospy.Subscriber("/cmd_state", Int8, idleCallbacks.state)
-        idleFb_move_queue = rospy.Subscriber("/fb_move_queue", Int8, idleCallbacks.fb_move_queue)
+        idleFb_move_executor = rospy.Subscriber("/fb_move_executor", Int8, idleCallbacks.fb_move_executor)
         idleDistance_to_face = rospy.Subscriber("/vision_face_d", Int8, idleCallbacks.distance_to_face)
         idleFace_joint_angles = rospy.Subscriber("/face_joint_angles", AnglesList, idleCallbacks.face_angles_update)
         idleFb_check_for_people = rospy.Subscriber("/fb_check_for_people", Int8, idleCallbacks.fb_check_for_people_done)

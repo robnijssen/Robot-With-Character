@@ -37,7 +37,7 @@ class Variables:
     # a variable to keep track of what state the control is in
     cmd_state = 0
     # a variable to keep track of which move the move queue is doing
-    fb_move_queue = 0
+    fb_move_executor = 0
     # a variable to keep track if a person is detected
     person_detected = False
     # a variable to keep track of how far away the face is
@@ -53,8 +53,8 @@ class Variables:
 class Callbacks:
     def state(self, state):
         inviteVariables.cmd_state = state.data
-    def fb_move_queue(self, feedback):
-        inviteVariables.fb_move_queue = feedback.data
+    def fb_move_executor(self, feedback):
+        inviteVariables.fb_move_executor = feedback.data
     def distance_to_face(self, distance):
         inviteVariables.distance_to_face = distance.data
     def face_angles_update(self, angles):
@@ -145,7 +145,7 @@ if __name__ == '__main__':
 
         # init subscribers
         inviteCmd_state = rospy.Subscriber("/cmd_state", Int8, inviteCallbacks.state)
-        inviteFb_move_queue = rospy.Subscriber("/fb_move_queue", Int8, inviteCallbacks.fb_move_queue)
+        inviteFb_move_executor = rospy.Subscriber("/fb_move_executor", Int8, inviteCallbacks.fb_move_executor)
         inviteDistance_to_face = rospy.Subscriber("/vision_face_d", Int8, inviteCallbacks.distance_to_face)
         inviteFace_joint_angles = rospy.Subscriber("/face_joint_angles", AnglesList, inviteCallbacks.face_angles_update)
         

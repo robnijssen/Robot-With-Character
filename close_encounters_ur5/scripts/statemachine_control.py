@@ -21,14 +21,11 @@ When done playing, it'll react on the outcome.
 class Constants:
     # sleep between state checks
     sleeptime = 0.3
-    # number of total turns (best out of 3 is max 6 turns)
-    max_turns = 6
 
 class Variables:
     # variables to keep track of the feedback
     idle_feedback = 0
     invite_feedback = 0
-    play_feedback = 0
     setUp_feedback = 0
     takeTurn_feedback = 0
     waitForTurn_feedback = 0
@@ -37,7 +34,7 @@ class Variables:
     turn_number = 0
     # score variables
     player_score = 0
-    bot_score = 0
+    bot_score = 1       # bot_score must be updated via topics later. for now, this makes sure the bot will count 2 wins in a row and move on to react
     player_total_score = 0
     bot_total_score = 0
     final_score = 0     # 0 = bot won, 1 = bot lost
@@ -49,8 +46,6 @@ class Callbacks:
         controlVariables.idle_feedback = feedback.data
     def invite(self, feedback):
         controlVariables.invite_feedback = feedback.data
-    def play(self, feedback):
-        controlVariables.play_feedback = feedback.data
     def setUp(self, feedback):
         controlVariables.setUp_feedback = feedback.data
     def takeTurn(self, feedback):
@@ -190,7 +185,7 @@ class WaitForTurn(State):
             return MainControlMachine.setUp
         else:
             rospy.logerr("Control: Transition from state wait for turn not found.")
-            return MainControlMachine.play
+            return MainControlMachine.waitForTurn
 
 class React(State):
     def transitionRun(self):
@@ -253,9 +248,9 @@ if __name__ == '__main__':
         # init subscribers
         fb_idle = rospy.Subscriber("/fb_idle", Int8, controlCallbacks.idle)
         fb_invite = rospy.Subscriber("/fb_invite", Int8, controlCallbacks.invite)
-        fb_play = rospy.Subscriber("/fb_set_up", Int8, controlCallbacks.setUp)
-        fb_play = rospy.Subscriber("/fb_take_turn", Int8, controlCallbacks.takeTurn)
-        fb_play = rospy.Subscriber("/fb_wait_for_turn", Int8, controlCallbacks.waitForTurn)
+        fb_set_up = rospy.Subscriber("/fb_set_up", Int8, controlCallbacks.setUp)
+        fb_take_turn = rospy.Subscriber("/fb_take_turn", Int8, controlCallbacks.takeTurn)
+        fb_wait_for_turn = rospy.Subscriber("/fb_wait_for_turn", Int8, controlCallbacks.waitForTurn)
         fb_react = rospy.Subscriber("/fb_react", Int8, controlCallbacks.react)
         
         # instantiate state machine

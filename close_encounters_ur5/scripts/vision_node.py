@@ -14,7 +14,7 @@ class Constants:
     sleep_time = 0.01
     # resolution values, to determine where the center is
     res_x, res_y = 640, 480
-    # values for distance determining
+    # values for determining distance to face
     distance_threshold_1 = 90
     distance_threshold_2 = 50
     # prepare response for set mode service

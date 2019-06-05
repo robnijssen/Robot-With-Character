@@ -38,7 +38,7 @@ class Variables:
     # a variable to keep track of what state the control is in
     cmd_state = 1
     # feedback from the move queue
-    fb_move_queue = 0
+    fb_move_executor = 0
     # a variable that tells if the cup is currently in frame
     cup_in_frame = False
     # a variable for checking if the cup is present
@@ -52,7 +52,6 @@ class Requests:
     # joint angles asking for the cup
     ask_joint_angles = [-2.0824106375323694, -1.1605928579913538, -2.5390597025500696, -0.06651240984071904, -4.364429179822103, -1.5051539579974573]
     # joint angles for picking, shaking, rolling, and placing
-    # startJointValues will affect all the angles defined after it
     startJointValues = [-1.95703870455, -1.24395019213, -2.39311916033, -0.233633343373, -4.47188872496, -1.77920324007]
     pickAngles = [-1.9672425428973597, -1.7987373510943812, -2.5357888380633753, 0.9961973428726196, -4.408938948308126, -1.6784494558917444]
     shakeAngles0 = [-1.9673622290240687, -1.6156447569476526, -2.505547348652975, 0.6628247499465942, -4.409106794987814, -1.6784732977496546]
@@ -63,6 +62,7 @@ class Requests:
     rollAngles1 = [-2.128000561391012, -1.9640992323504847, -2.2051385084735315, 0.5728284120559692, -5.225958649312155, -4.191371266041891]
     placeAngles0 = [-2.179335419331686, -1.6346343199359339, -2.4752472082721155, 0.7155462503433228, -4.206889454518453, -1.5]
     placeAngles1 = [-1.9673622290240687, -1.6156447569476526, -2.505547348652975, 0.6628247499465942, -4.409106794987814, -1.6784732977496546]
+    checkScoreAngles = [-2.1188, -1.5585, -1.5440, -1.5046, -4.7562, -1.3496]
     # a request ready with constants and the start position
     request = SendGoalRequest()
     request.goal, request.speed, request.acceleration, request.tolerance, request.delay = start_joint_angles, Constants().general_max_speed, Constants().general_max_acceleration, Constants().tolerance, Constants().sleeptime
@@ -72,8 +72,8 @@ class Requests:
 class Callbacks:
     def state(self, state):
         takeTurnVariables.cmd_state = state.data
-    def fb_move_queue(self, feedback):
-        takeTurnVariables.fb_move_queue = feedback.data
+    def fb_move_executor(self, feedback):
+        takeTurnVariables.fb_move_executor = feedback.data
     def getStatus (self, data):
         # Get current data of gripper
         gripper_input.gACT = data.gACT
@@ -97,6 +97,9 @@ class TakeTurnMachine(StateMachine):
 class Idle(State):
     def transitionRun(self):
         rospy.loginfo("Take turn: Not active.")
+        # publish done with taking turn
+        fb_take_turn_publisher.publish(1)
+        rospy.sleep(takeTurnConstants.sleeptime * 2)
         # publish feedback 0
         fb_take_turn_publisher.publish(0)
     def mainRun(self):
@@ -112,11 +115,11 @@ class GoToStart(State):
         rospy.loginfo("Take turn: Moving to start position.")
         # send to move queue
         takeTurnRequests.request.goal = takeTurnRequests.start_joint_angles
-        takeTurnOverwriteGoals(takeTurnRequests.request)
+        takeTurnOverwriteGoal(takeTurnRequests.request)
     def mainRun(self):
         rospy.sleep(takeTurnConstants.sleeptime)
     def next(self):
-        if takeTurnVariables.fb_move_queue == 1:
+        if takeTurnVariables.fb_move_executor == 1:
             return TakeTurnMachine.checkForCup
         else:
             return TakeTurnMachine.goToStart
@@ -130,7 +133,7 @@ class CheckForCup(State):
             # it's spotted while facing the cup stand, so it's assumed to be in place
             takeTurnVariables.cup_detected = True
     def next(self):
-        if takeTurnVariables.fb_move_queue == 1:
+        if takeTurnVariables.fb_move_executor == 1:
             if takeTurnVariables.cup_detected == True:
                 return TakeTurnMachine.pickCup
             else:
@@ -145,7 +148,7 @@ class AskForCup(State):
         rospy.loginfo("Take turn: Asking for cup.")
         # send to move queue
         takeTurnRequests.request.goal = takeTurnVariables.face_joint_angles
-        takeTurnOverwriteGoals(takeTurnRequests.request)
+        takeTurnOverwriteGoal(takeTurnRequests.request)
         takeTurnRequests.request.goal = takeTurnRequests.ask_joint_angles
         takeTurnAddGoal(takeTurnRequests.request)
         takeTurnRequests.request.goal = takeTurnVariables.face_joint_angles
@@ -153,7 +156,7 @@ class AskForCup(State):
     def mainRun(self):
         rospy.sleep(takeTurnConstants.sleeptime)
     def next(self):
-        if takeTurnVariables.fb_move_queue == 3:
+        if takeTurnVariables.fb_move_executor == 3:
             return TakeTurnMachine.checkForCup
         else:
             return TakeTurnMachine.askForCup
@@ -163,13 +166,13 @@ class PickCup(State):
         rospy.loginfo("Take turn: Picking cup.")
         # send to move queue
         takeTurnRequests.request.goal = takeTurnRequests.startJointValues
-        takeTurnOverwriteGoals(takeTurnRequests.request)
+        takeTurnOverwriteGoal(takeTurnRequests.request)
         takeTurnRequests.request.goal = takeTurnRequests.pickAngles
         takeTurnAddGoal(takeTurnRequests.request)
     def mainRun(self):
         rospy.sleep(takeTurnConstants.sleeptime)
     def next(self):
-        if takeTurnVariables.fb_move_queue == 2:
+        if takeTurnVariables.fb_move_executor == 2:
             return TakeTurnMachine.grab
         else:
             return TakeTurnMachine.pickCup
@@ -177,12 +180,11 @@ class PickCup(State):
 class Grab(State):
     def transitionRun(self):
         rospy.loginfo("Take turn: Closing the gripper.")
-    def mainRun(self):
         # tell gripper to close
         takeTurnGripperCommand.rPR = 200
         takeTurnGripperGripperPublisher.publish(takeTurnGripperCommand)
+    def mainRun(self):
         rospy.sleep(takeTurnConstants.griptime)
-        print("MOVING ON")
     def next(self):
         return TakeTurnMachine.shake
 
@@ -191,7 +193,7 @@ class Shake(State):
         rospy.loginfo("Take turn: Shaking cup.")
         # send to move queue
         takeTurnRequests.request.goal = takeTurnRequests.shakeAngles0
-        takeTurnOverwriteGoals(takeTurnRequests.request)
+        takeTurnOverwriteGoal(takeTurnRequests.request)
         takeTurnRequests.request.goal = takeTurnRequests.shakeAngles1
         takeTurnAddGoal(takeTurnRequests.request)
         takeTurnRequests.request.goal, takeTurnRequests.request.speed, takeTurnRequests.request.acceleration, takeTurnRequests.request.tolerance, takeTurnRequests.request.delay = takeTurnRequests.start_joint_angles, Constants().shake_max_speed, Constants().shake_max_acceleration, Constants().tolerance, Constants().sleeptime
@@ -207,7 +209,7 @@ class Shake(State):
     def mainRun(self):
         rospy.sleep(takeTurnConstants.sleeptime)
     def next(self):
-        if takeTurnVariables.fb_move_queue == 6:
+        if takeTurnVariables.fb_move_executor == 6:
             return TakeTurnMachine.roll
         else:
             return TakeTurnMachine.shake
@@ -217,13 +219,13 @@ class Roll(State):
         rospy.loginfo("Take turn: Rolling dice with cup.")
         # send to move queue
         takeTurnRequests.request.goal = takeTurnRequests.rollAngles0
-        takeTurnOverwriteGoals(takeTurnRequests.request)
+        takeTurnOverwriteGoal(takeTurnRequests.request)
         takeTurnRequests.request.goal = takeTurnRequests.rollAngles1
         takeTurnAddGoal(takeTurnRequests.request)
     def mainRun(self):
         rospy.sleep(takeTurnConstants.sleeptime * 2)
     def next(self):
-        if takeTurnVariables.fb_move_queue == 2:
+        if takeTurnVariables.fb_move_executor == 2:
             return TakeTurnMachine.place
         else:
             return TakeTurnMachine.roll
@@ -233,13 +235,13 @@ class Place(State):
         rospy.loginfo("Take turn: Placing cup back.")
         # send to move queue
         takeTurnRequests.request.goal = takeTurnRequests.placeAngles0
-        takeTurnOverwriteGoals(takeTurnRequests.request)
+        takeTurnOverwriteGoal(takeTurnRequests.request)
         takeTurnRequests.request.goal = takeTurnRequests.placeAngles1
         takeTurnAddGoal(takeTurnRequests.request)
     def mainRun(self):
         rospy.sleep(takeTurnConstants.sleeptime * 2)
     def next(self):
-        if takeTurnVariables.fb_move_queue == 2:
+        if takeTurnVariables.fb_move_executor == 2:
             return TakeTurnMachine.release
         else:
             return TakeTurnMachine.place
@@ -247,11 +249,36 @@ class Place(State):
 class Release(State):
     def transitionRun(self):
         rospy.loginfo("Take turn: Opening gripper.")
-    def mainRun(self):
         # tell gripper to open
         takeTurnGripperCommand.rPR = 0
         takeTurnGripperGripperPublisher.publish(takeTurnGripperCommand)
+    def mainRun(self):
         rospy.sleep(takeTurnConstants.griptime)
+    def next(self):
+        return TakeTurnMachine.goToScoreCheckingPosition
+
+class GoToScoreCheckingPosition(State):
+    def transitionRun(self):
+        rospy.loginfo("Take turn: Moving to check for score position.")
+        # send to move queue
+        takeTurnRequests.request.goal = takeTurnRequests.checkScoreAngles
+        takeTurnOverwriteGoal(takeTurnRequests.request)
+    def mainRun(self):
+        rospy.sleep(takeTurnConstants.sleeptime * 2)
+    def next(self):
+        if takeTurnVariables.fb_move_executor == 1:
+            return TakeTurnMachine.checkScore
+        else:
+            return TakeTurnMachine.goToScoreCheckingPosition
+
+class CheckScore(State):
+    def transitionRun(self):
+        rospy.loginfo("Take turn: Checking score.")
+    def mainRun(self):
+        # set vision mode to dice recognition for position and score
+        # pass the bot score on to control
+        # set vision mode to not check anything
+        rospy.sleep(takeTurnConstants.sleeptime * 2)
     def next(self):
         return TakeTurnMachine.idle
 
@@ -291,12 +318,12 @@ if __name__ == '__main__':
         rospy.Subscriber("Robotiq2FGripperRobotInput", inputMsg.Robotiq2FGripper_robot_input, takeTurnCallbacks.getStatus) # Subscribe to the gripper registers to get the status
         gripper_input = inputMsg.Robotiq2FGripper_robot_input()
         takeTurnCmd_state = rospy.Subscriber("/cmd_state", Int8, takeTurnCallbacks.state)
-        takeTurnFb_move_queue = rospy.Subscriber("/fb_move_queue", Int8, takeTurnCallbacks.fb_move_queue)
+        takeTurnFb_move_executor = rospy.Subscriber("/fb_move_executor", Int8, takeTurnCallbacks.fb_move_executor)
 
         # init services
         rospy.wait_for_service('/overwrite_goals')
         rospy.wait_for_service('/add_goal')
-        takeTurnOverwriteGoals = rospy.ServiceProxy('/overwrite_goals', SendGoal)
+        takeTurnOverwriteGoal = rospy.ServiceProxy('/overwrite_goals', SendGoal)
         takeTurnAddGoal = rospy.ServiceProxy('/add_goal', SendGoal)
 
         # instantiate state machine
@@ -311,6 +338,8 @@ if __name__ == '__main__':
         TakeTurnMachine.roll = Roll()
         TakeTurnMachine.place = Place()
         TakeTurnMachine.release = Release()
+        TakeTurnMachine.goToScoreCheckingPosition = GoToScoreCheckingPosition()
+        TakeTurnMachine.checkScore = CheckScore()
         TakeTurnMachine().runAll(0)
 
     except rospy.ROSInterruptException:

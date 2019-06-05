@@ -48,7 +48,7 @@ class Variables:
     # state 5: bot won, state 6: player won
     cmd_state = 1
     # feedback from the move queue
-    fb_move_queue = 0
+    fb_move_executor = 0
     # a variable to keep track if a person is detected
     person_detected = False
     # a variable to keep track if the bot won or lost
@@ -61,9 +61,9 @@ class Variables:
     distance_to_face = 0
     # last known face position's joint values
     face_joint_angles = AnglesList()
-    face_joint_angles.angles = [-2.315057341252462, -1.1454232374774378, -2.5245259443866175, 0.5526210069656372, -4.67750066915621, -3.170588795338766]
+    face_joint_angles.angles = [-2.315057341252462, -1.1454232374774378, -2.5245259443866175, 0.5526210069656372, -4.67750066915621, -1.77920324007]
     # happy wiggle values
-    happy_wiggle_default = [-2.315057341252462, -1.1454232374774378, -2.5245259443866175, 0.5526210069656372, -4.67750066915621, -3.170588795338766]
+    happy_wiggle_default = [-2.315057341252462, -1.1454232374774378, -2.5245259443866175, 0.5526210069656372, -4.67750066915621, -1.77920324007]
     happy_wiggle_start = list(happy_wiggle_default)
     happy_wiggle_left = list(happy_wiggle_default)
     happy_wiggle_right = list(happy_wiggle_default)
@@ -109,8 +109,8 @@ class Functions:
 class Callbacks:
     def state(self, state):
         reactVariables.cmd_state = state.data
-    def fb_move_queue(self, feedback):
-        reactVariables.fb_move_queue = feedback.data
+    def fb_move_executor(self, feedback):
+        reactVariables.fb_move_executor = feedback.data
     def distance_to_face(self, distance):
         reactVariables.distance_to_face = distance.data
     def face_angles_update(self, angles):
@@ -161,7 +161,7 @@ class ReactHappy(State):
     def mainRun(self):
         rospy.sleep(reactConstants.sleeptime)
     def next(self):
-        if reactVariables.fb_move_queue == 5:
+        if reactVariables.fb_move_executor == 5:
             # move on with the next action after 5th move is complete
             return ReactMachine.check
         else:
@@ -208,17 +208,20 @@ class Check(State):
         reactVisionChecks(reactVariables.vision_request)
         # produce and send request for the move queue
         request = SendGoalRequest()
-        request.goal, request.speed, request.acceleration, request.tolerance, request.delay = reactVariables.face_joint_angles, reactConstants.general_max_speed, reactConstants.general_max_acceleration, reactConstants.tolerance, reactConstants.sleeptime
+        request.goal, request.speed, request.acceleration, request.tolerance, request.delay = reactVariables.face_joint_angles.angles, reactConstants.general_max_speed, reactConstants.general_max_acceleration, reactConstants.tolerance, reactConstants.sleeptime
         reactOverwriteGoals(request)
         reactVariables.person_detected = False
     def mainRun(self):
         if reactVariables.distance_to_face > 0:
+            # face found; vision node can stop looking for a face
+            reactVariables.vision_request.mode = 0
+            reactVisionChecks(reactVariables.vision_request)
             reactVariables.person_detected = True
     def next(self):
-        # tell vision node to stop looking for a face
-        reactVariables.vision_request.mode = 0
-        reactVisionChecks(reactVariables.vision_request)
-        if reactVariables.fb_move_queue == 1:
+        if reactVariables.fb_move_executor == 1:
+            # tell vision node to stop looking for a face
+            reactVariables.vision_request.mode = 0
+            reactVisionChecks(reactVariables.vision_request)
             # publish feedback about the person when done moving
             if reactVariables.person_detected == True:
                 fb_react_publisher.publish(1)
@@ -249,7 +252,7 @@ if __name__ == '__main__':
 
         # init subscribers
         reactCmd_state = rospy.Subscriber("/cmd_state", Int8, reactCallbacks.state)
-        reactFb_move_queue = rospy.Subscriber("/fb_move_queue", Int8, reactCallbacks.fb_move_queue)
+        reactFb_move_executor = rospy.Subscriber("/fb_move_executor", Int8, reactCallbacks.fb_move_executor)
         reactDistance_to_face = rospy.Subscriber("/vision_face_d", Int8, reactCallbacks.distance_to_face)
         reactFace_joint_angles = rospy.Subscriber("/face_joint_angles", AnglesList, reactCallbacks.face_angles_update)
 

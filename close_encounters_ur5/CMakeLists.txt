@@ -55,6 +55,7 @@ find_package(ur5 REQUIRED)
 add_message_files(
   FILES
   AnglesList.msg
+  ExecuteGoal.msg
 )
 
 # Generate services in the 'srv' folder
