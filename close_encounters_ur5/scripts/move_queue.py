@@ -31,8 +31,6 @@ class Variables:
     current_order = ExecuteGoal()
     # type declaration
     pose_goal = geometry_msgs.msg.Pose()
-    # a variable to check if the order added must be executed immediately
-    execute_upon_add_order = True
     # standard responses for the callbacks ready to go
     goal_response = SendGoalResponse()
     goal_response.response = True
@@ -77,8 +75,6 @@ class Functions:
         queueVariables.current_order.number = 0
         # delete all items from the order list
         queueFunctions.delete_orders()
-        # execute when add_order is executed
-        queueVariables.execute_upon_add_order = True
         # stop the current movements
         group.stop()
         group.clear_pose_targets()
@@ -101,6 +97,17 @@ class Functions:
             del queueVariables.orders[5][0]
         except:
             rospy.logwarn("Move_queue: Order 0 couldn't be deleted.")
+    def execute_upon_add_order_check(self, joint_angles):
+        try:
+            if not queueVariables.orders[0][1] == []:
+                pass # list isn't empty --> don't execute a new order
+            elif not queueVariables.orders[1][1] == []:
+                pass # list isn't empty --> don't execute a new order
+        except:
+            if joint_angles == True:
+                queueFunctions.update_current_order_joint_angles()
+            else:
+                queueFunctions.update_current_order_pose()
     def update_current_order_joint_angles(self):
         # overwrite current order with the next 
         queueVariables.current_order.number += 1
@@ -138,16 +145,14 @@ class Callbacks:
                 # pose goal isn't empty --> execute pose movement
                 queueFunctions.update_current_order_pose()
         except:
-            rospy.loginfo("Move_queue: Waiting for a new order to be added.")
             # no next goal yet --> execute in add_goal
-            queueVariables.execute_upon_add_order = True
+            rospy.loginfo("Move_queue: Waiting for a new order to be added.")
     def overwrite_orders(self, overwrite_orders):
         rospy.loginfo("Move_queue: Orders overwritten with a joint angle order.")
         # reset move number, delete order list, execute upon add_order, and stop current movements
         queueFunctions.prepare_overwriting()
         # populate the list with the new goals and settings
         queueCallbacks.add_order(overwrite_orders)
-        rospy.loginfo("Move_queue: Done with overwriting orders.")
         return queueVariables.goal_response
     def add_order(self, add_orders):
         queueVariables.orders[0].append(list(add_orders.goal))
@@ -156,13 +161,8 @@ class Callbacks:
         queueVariables.orders[3].append(add_orders.acceleration)
         queueVariables.orders[4].append(add_orders.tolerance)
         queueVariables.orders[5].append(add_orders.delay)
-        if queueVariables.execute_upon_add_order == True:
-            rospy.loginfo("Move_queue: Starting movement from add_order.")
-            # reset the variable
-            queueVariables.execute_upon_add_order = False
-            # execute the added order
-            queueFunctions.update_current_order_joint_angles()
-        rospy.loginfo("Move_queue: Done with adding orders.")
+        # check if the added order needs to be executed now
+        queueFunctions.execute_upon_add_order_check(True)
         return queueVariables.goal_response
     def overwrite_pose_order(self, overwrite_orders):
         rospy.loginfo("Move_queue: Orders overwritten with a pose order.")
@@ -170,7 +170,6 @@ class Callbacks:
         queueFunctions.prepare_overwriting()
         # populate the list with the new goals and settings
         queueCallbacks.add_pose_order(overwrite_orders)
-        rospy.loginfo("Move_queue: Done with overwriting orders.")
         return queueVariables.goal_response
     def add_pose_order(self, add_orders):
         queueVariables.orders[0].append(list([]))
@@ -179,13 +178,8 @@ class Callbacks:
         queueVariables.orders[3].append(add_orders.acceleration)
         queueVariables.orders[4].append(add_orders.tolerance)
         queueVariables.orders[5].append(add_orders.delay)
-        if queueVariables.execute_upon_add_order == True:
-            rospy.loginfo("Move_queue: Starting movement from add_pose_order.")
-            # reset the variable
-            queueVariables.execute_upon_add_order = False
-            # execute the added order
-            queueFunctions.update_current_order_pose()
-        rospy.loginfo("Move_queue: Done with adding orders.")
+        # check if the added order needs to be executed now
+        queueFunctions.execute_upon_add_order_check(False)
         return queueVariables.goal_response
     def set_face_position(self, coordinates):
         # determine angles from position in frame and current angles

@@ -22,16 +22,13 @@ class Variables:
     current_speed = 1
     current_acceleration = 1
     current_tolerance = 0.01
-    # a variable to keep the node giving the move orders informed
-    move_number = 0
 
 class Functions:
-    def check_goal_number(self, goal):
-        # check if the goal number has to be reset
-        if goal == 1:
-            executorVariables.move_number = 0
-            fb_move_executor.publish(executorVariables.move_number)
-            rospy.loginfo("Move_executor: Goal number reset.")
+    def check_goal_number(self, number):
+        # check if the move number has to be reset
+        if number == 1:
+            fb_move_executor.publish(0)
+            rospy.loginfo("Move_executor: Move number reset.")
     def check_speed_and_acceleration(self, speed, acceleration):
         # change the max speed and max acceleration if they are different
         if abs(executorVariables.current_speed - speed) > 0.001:
@@ -49,16 +46,15 @@ class Functions:
             execute_group.set_goal_position_tolerance(order.tolerance)
             executorVariables.current_tolerance = tolerance
             rospy.loginfo("Move_executor: Tolerance changed to " + str(tolerance))
-    def go(self):
+    def go(self, number):
         # go to the planned position
         execute_group.go(wait=True)
         # make sure to stop the residual movements
         execute_group.stop()
         execute_group.clear_pose_targets()
         # add one to the move number and publish it
-        rospy.loginfo("Move_executor: Goal number " + str(executorVariables.move_number) + " reached.")
-        executorVariables.move_number += 1
-        fb_move_executor.publish(executorVariables.move_number)
+        rospy.loginfo("Move_executor: Goal number " + str(number) + " reached.")
+        fb_move_executor.publish(number)
 
 class Callbacks:
     def execute_joint_movement(self, order):
@@ -70,7 +66,7 @@ class Callbacks:
         # compute a plan
         execute_group.set_joint_value_target(order.goal)
         # go to the planned position
-        executorFunctions.go()
+        executorFunctions.go(order.number)
     def execute_pose_movement(self, order):
         rospy.loginfo("Move_executor: Executing pose movement.")
         # check if the move_number needs to be reset
@@ -84,7 +80,7 @@ class Callbacks:
         # send the completed goal
         execute_group.set_pose_target(executorVariables.pose_goal)
         # go to the planned position
-        executorFunctions.go()
+        executorFunctions.go(order.number)
 
 if __name__ == '__main__':
     try:

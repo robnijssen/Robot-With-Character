@@ -1,0 +1,21 @@
+<launch>
+
+    <!-- service nodes -->
+    <group>
+        <!-- move queue node -->
+        <node pkg="close_encounters_ur5" type="move_queue.py" name="move_queue" output="screen"/>
+
+        <!-- move executor node -->
+        <node pkg="close_encounters_ur5" type="move_executor.py" name="move_executor" output="screen"/>
+        
+        <!-- vision node -->
+        <node pkg="close_encounters_ur5" type="vision_node.py" name="vision_node" output="screen"/>
+
+        <!-- memory node -->
+        <node pkg="close_encounters_ur5" type="position_memory.py" name="position_memory_node" output="screen"/>
+    </group>
+
+    <!-- node sending movements to the move queue -->
+    <node pkg="close_encounters_ur5" type="movement_test_node.py" name="movement_test_node" output="screen"/>
+
+</launch>
