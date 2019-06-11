@@ -20,13 +20,13 @@ Orders list can be either added to or overwritten.
     
 class Variables:
     # prepare empty list for the goals supplied later
-    joint_goals = []
-    pose_goals = []
+    goals = []
+    types = []
     speeds = []
     accelerations = []
     tolerances = []
     delays = []
-    orders = [joint_goals, pose_goals, speeds, accelerations, tolerances, delays]
+    orders = [goals, types, speeds, accelerations, tolerances, delays]
     # prepare a variable for sending to the move executor
     current_order = ExecuteGoal()
     # type declaration
@@ -43,33 +43,6 @@ class Variables:
     sleeptime = 0.05
    
 class Functions:
-    """
-    # compute a plan to get to the next goal
-    if queueVariables.orders[0][0] != []:
-        #   use joint angles
-        group.set_joint_value_target(queueVariables.orders[0][0])
-    elif queueVariables.orders[1][0] != []:
-        #   use pose goal
-        # put the values in the goal
-        queueVariables.pose_goal.position.x, queueVariables.pose_goal.position.y, queueVariables.pose_goal.position.z, queueVariables.pose_goal.orientation.x, queueVariables.pose_goal.orientation.y, queueVariables.pose_goal.orientation.z, queueVariables.pose_goal.orientation.w = queueVariables.orders[1][0]
-        # set tolerances
-        group.set_goal_orientation_tolerance(queueVariables.orders[4][0])
-        group.set_goal_position_tolerance(queueVariables.orders[4][0])
-        # send the completed goal
-        group.set_pose_target(queueVariables.pose_goal)
-    else:
-        # both joint angles and pose lists are empty, so no goal could be planned
-        rospy.logerr("Move queue: No order could be given. Joint angles and pose lists are both empty.")
-    # go to the planned position
-    group.go(wait=True)
-    # delete the completed item from the list
-    del queueVariables.orders[0][0]
-    del queueVariables.orders[1][0]
-    del queueVariables.orders[2][0]
-    del queueVariables.orders[3][0]
-    del queueVariables.orders[4][0]
-    del queueVariables.orders[5][0]
-    """
     def prepare_overwriting(self):
         # reset the counters for order number
         queueVariables.current_order.number = 0
@@ -97,90 +70,88 @@ class Functions:
             del queueVariables.orders[5][0]
         except:
             rospy.logwarn("Move_queue: Order 0 couldn't be deleted.")
-    def execute_upon_add_order_check(self, joint_angles):
+    def execute_upon_add_order_check(self):
         try:
-            if not queueVariables.orders[0][1] == []:
-                pass # list isn't empty --> don't execute a new order
-            elif not queueVariables.orders[1][1] == []:
-                pass # list isn't empty --> don't execute a new order
+            if queueVariables.orders[1][1] != []:
+                pass 
+            # list isn't empty and it's not a cartesian path --> don't execute a new order
         except:
-            if joint_angles == True:
-                queueFunctions.update_current_order_joint_angles()
+            if queueVariables.orders[1][0] != 2:
+                queueFunctions.update_current_order(1)
             else:
-                queueFunctions.update_current_order_pose()
-    def update_current_order_joint_angles(self):
-        # overwrite current order with the next 
+                queueFunctions.update_current_order(2)
+    def update_current_order(self, order_type):
+        # overwrite current goal with the next and send them to the move executor
         queueVariables.current_order.number += 1
-        queueVariables.current_order.goal = queueVariables.orders[0][0]
-        queueVariables.current_order.speed = queueVariables.orders[2][0]
-        queueVariables.current_order.acceleration = queueVariables.orders[3][0]
-        queueVariables.current_order.tolerance = queueVariables.orders[4][0]
-        execute_joint_movement.publish(queueVariables.current_order)
-        rospy.sleep(queueVariables.sleeptime)
-    def update_current_order_pose(self):
-        queueVariables.current_order.number += 1
-        queueVariables.current_order.goal = queueVariables.orders[1][0]
-        queueVariables.current_order.speed = queueVariables.orders[2][0]
-        queueVariables.current_order.acceleration = queueVariables.orders[3][0]
-        queueVariables.current_order.tolerance = queueVariables.orders[4][0]
-        execute_pose_movement.publish(queueVariables.current_order)
-        rospy.sleep(queueVariables.sleeptime)
+        if order_type == 1:
+            # add and run once
+            queueVariables.current_order.goal = queueVariables.orders[0][0]
+            queueVariables.current_order.type = queueVariables.orders[1][0]
+            queueVariables.current_order.speed = queueVariables.orders[2][0]
+            queueVariables.current_order.acceleration = queueVariables.orders[3][0]
+            queueVariables.current_order.tolerance = queueVariables.orders[4][0]
+            execute_movement.publish(queueVariables.current_order)
+            rospy.sleep(queueVariables.sleeptime)
+        else:
+            # add the rest of the cartesian path goals
+            for i in range(1, len(queueVariables.orders[1])):
+                if queueVariables.orders[i] != 2:
+                    j = i
+                    break
+            for k in range(0, j):
+                queueVariables.current_order.goal = queueVariables.orders[0][k]
+                queueVariables.current_order.type = queueVariables.orders[1][k]
+                queueVariables.current_order.speed = queueVariables.orders[2][k]
+                queueVariables.current_order.acceleration = queueVariables.orders[3][k]
+                queueVariables.current_order.tolerance = queueVariables.orders[4][k]
+                execute_movement.publish(queueVariables.current_order)
+                rospy.sleep(queueVariables.sleeptime)
+            # start 
     def determine_angles(self, x, y):
         # to do: add corrections using the x and y supplied by the vision node
         return group.get_current_joint_values()
 
 class Callbacks:
+    def overwrite_orders(self, overwrite_orders, order_type):
+        rospy.loginfo("Move_queue: Orders overwritten.")
+        # reset move number, delete order list, execute upon add_order, and stop current movements
+        queueFunctions.prepare_overwriting()
+        # populate the list with the new goals and settings
+        if order_type == 0:
+            queueCallbacks.add_order(overwrite_orders)
+        elif order_type == 1:
+            queueCallbacks.add_cartesian_order(overwrite_orders)
+        else:
+            rospy.logerr("Move_queue: Unknown order type in overwrite orders callback.")
+        return queueVariables.goal_response
+    def add_order(self, add_orders):
+        # append to lists
+        queueVariables.orders[0].append(add_orders.goal)
+        queueVariables.orders[1].append(add_orders.type)
+        queueVariables.orders[2].append(add_orders.speed)
+        queueVariables.orders[3].append(add_orders.acceleration)
+        queueVariables.orders[4].append(add_orders.tolerance)
+        queueVariables.orders[5].append(add_orders.delay)
+        # check if the added order needs to be executed now
+        queueFunctions.execute_upon_add_order_check()
+        return queueVariables.goal_response
+    def add_cartesian_order(self, add_order):
+        # 
+        pass
+    def end_cartesian_order(self, _):
+        pass
     def order_completed(self, order_number):
         #   when an order is completed, a new order will be published if available
         # delete the completed order
         queueFunctions.delete_order_0()
-        # check for joint or pose movement
+        # check if there's a new order available to execute now
         try:
-            if not queueVariables.orders[0][0] == []:
-                #rospy.loginfo("Move_queue: Sending joint angle order.")
-                # joint goal isn't empty --> execute joint movement
-                queueFunctions.update_current_order_joint_angles()
-            elif not queueVariables.orders[1][0] == []:
-                #rospy.loginfo("Move_queue: Sending pose order.")
-                # pose goal isn't empty --> execute pose movement
-                queueFunctions.update_current_order_pose()
+            if queueVariables.orders[1][0] != 2:
+                queueFunctions.update_current_order(1)
+            else:
+                queueFunctions.update_current_order(2)
         except:
-            # no next goal yet --> execute in add_goal
             rospy.loginfo("Move_queue: Waiting for a new order to be added.")
-    def overwrite_orders(self, overwrite_orders):
-        rospy.loginfo("Move_queue: Orders overwritten with a joint angle order.")
-        # reset move number, delete order list, execute upon add_order, and stop current movements
-        queueFunctions.prepare_overwriting()
-        # populate the list with the new goals and settings
-        queueCallbacks.add_order(overwrite_orders)
-        return queueVariables.goal_response
-    def add_order(self, add_orders):
-        queueVariables.orders[0].append(list(add_orders.goal))
-        queueVariables.orders[1].append(list([]))
-        queueVariables.orders[2].append(add_orders.speed)
-        queueVariables.orders[3].append(add_orders.acceleration)
-        queueVariables.orders[4].append(add_orders.tolerance)
-        queueVariables.orders[5].append(add_orders.delay)
-        # check if the added order needs to be executed now
-        queueFunctions.execute_upon_add_order_check(True)
-        return queueVariables.goal_response
-    def overwrite_pose_order(self, overwrite_orders):
-        rospy.loginfo("Move_queue: Orders overwritten with a pose order.")
-        # reset move number, delete order list, execute upon add_order, and stop current movements
-        queueFunctions.prepare_overwriting()
-        # populate the list with the new goals and settings
-        queueCallbacks.add_pose_order(overwrite_orders)
-        return queueVariables.goal_response
-    def add_pose_order(self, add_orders):
-        queueVariables.orders[0].append(list([]))
-        queueVariables.orders[1].append(list(add_orders.goal))
-        queueVariables.orders[2].append(add_orders.speed)
-        queueVariables.orders[3].append(add_orders.acceleration)
-        queueVariables.orders[4].append(add_orders.tolerance)
-        queueVariables.orders[5].append(add_orders.delay)
-        # check if the added order needs to be executed now
-        queueFunctions.execute_upon_add_order_check(False)
-        return queueVariables.goal_response
     def set_face_position(self, coordinates):
         # determine angles from position in frame and current angles
         determined_joint_angles = SetJointValuesRequest()
@@ -210,30 +181,22 @@ if __name__ == '__main__':
         moveit_commander.roscpp_initialize(sys.argv)
         group = moveit_commander.MoveGroupCommander("manipulator")
 
-        # give the move group enough time and tries
-        group.set_planning_time(10) # 10 seconds is probably far too much
-        group.set_num_planning_attempts(5)
-
         # init classes
         queueVariables = Variables()
         queueCallbacks = Callbacks()
         queueFunctions = Functions()
 
-        # init publisher for feedback to commanding nodes
-        #fb_queue = rospy.Publisher('/fb_move_queue', Int8, queue_size=1)
-
         # init publisher to command the move executor
-        execute_joint_movement = rospy.Publisher('/execute_joint_movement', ExecuteGoal, queue_size=1)
-        execute_pose_movement = rospy.Publisher('/execute_pose_movement', ExecuteGoal, queue_size=1)
+        execute_movement = rospy.Publisher('/execute_movement', ExecuteGoal, queue_size=1)
+        run_path = rospy.Publisher('/run_path', Int8, queue_size=1)
 
         # init subscriber to check the feedback from the move_executor
         rospy.Subscriber('/fb_move_executor', Int8, queueCallbacks.order_completed)
 
         # init services
-        rospy.Service('/overwrite_goals', SendGoal, queueCallbacks.overwrite_orders)
+        rospy.Service('/overwrite_goal', SendGoal, queueCallbacks.overwrite_orders, order_type=0)
         rospy.Service('/add_goal', SendGoal, queueCallbacks.add_order)
-        rospy.Service('/overwrite_pose_goal', SendGoal, queueCallbacks.overwrite_pose_order)
-        rospy.Service('/add_pose_goal', SendGoal, queueCallbacks.add_pose_order)
+        rospy.Service('/overwrite_cartesian', SendGoal, queueCallbacks.overwrite_orders, order_type=1)
         rospy.Service('/set_face_position', SetPosition, queueCallbacks.set_face_position)
         rospy.Service('/set_cup_position', SetPosition, queueCallbacks.set_cup_position)
 
@@ -249,7 +212,7 @@ if __name__ == '__main__':
         rospy.spin()
 
         # stop the movements and clear goals
-        rospy.loginfo("Stopping movements.")
+        rospy.loginfo("Move_queue: Stopping movements.")
         group.stop()
         group.clear_pose_targets()
 

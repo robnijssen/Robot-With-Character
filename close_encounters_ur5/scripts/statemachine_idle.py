@@ -101,13 +101,13 @@ class CheckForPeople(State):
         idleVisionChecks(idleVariables.vision_request)
         # produce requests for the move queue
         request0, request1, request2, request3, request4 = SendGoalRequest(), SendGoalRequest(), SendGoalRequest(), SendGoalRequest(), SendGoalRequest()
-        request0.goal, request0.speed, request0.acceleration, request0.tolerance, request0.delay = idleVariables.face_joint_angles.angles, idleConstants.general_max_speed, idleConstants.general_max_acceleration, idleConstants.tolerance, 0.01
-        request1.goal, request1.speed, request1.acceleration, request1.tolerance, request1.delay = idleConstants.check_for_face_middle, idleConstants.general_max_speed, idleConstants.general_max_acceleration, idleConstants.tolerance, 0.01
-        request2.goal, request2.speed, request2.acceleration, request2.tolerance, request2.delay = idleConstants.check_for_face_left, idleConstants.general_max_speed, idleConstants.general_max_acceleration, idleConstants.tolerance, 5.0
-        request3.goal, request3.speed, request3.acceleration, request3.tolerance, request3.delay = idleConstants.check_for_face_right, idleConstants.general_max_speed, idleConstants.general_max_acceleration, idleConstants.tolerance, 5.0
-        request4.goal, request4.speed, request4.acceleration, request4.tolerance, request4.delay = idleConstants.check_for_face_middle, idleConstants.general_max_speed, idleConstants.general_max_acceleration, idleConstants.tolerance, 5.0
+        request0.goal, request0.type, request0.speed, request0.acceleration, request0.tolerance, request0.delay = idleVariables.face_joint_angles.angles, 0, idleConstants.general_max_speed, idleConstants.general_max_acceleration, idleConstants.tolerance, 0.01
+        request1.goal, request0.type, request1.speed, request1.acceleration, request1.tolerance, request1.delay = idleConstants.check_for_face_middle, 0, idleConstants.general_max_speed, idleConstants.general_max_acceleration, idleConstants.tolerance, 0.01
+        request2.goal, request0.type, request2.speed, request2.acceleration, request2.tolerance, request2.delay = idleConstants.check_for_face_left, 0, idleConstants.general_max_speed, idleConstants.general_max_acceleration, idleConstants.tolerance, 5.0
+        request3.goal, request0.type, request3.speed, request3.acceleration, request3.tolerance, request3.delay = idleConstants.check_for_face_right, 0, idleConstants.general_max_speed, idleConstants.general_max_acceleration, idleConstants.tolerance, 5.0
+        request4.goal, request0.type, request4.speed, request4.acceleration, request4.tolerance, request4.delay = idleConstants.check_for_face_middle, 0, idleConstants.general_max_speed, idleConstants.general_max_acceleration, idleConstants.tolerance, 5.0
         # send request list to the move queue
-        idleOverwriteGoals(request0)
+        idleOverwriteGoal(request0)
         idleAddGoal(request1)
         idleAddGoal(request2)
         idleAddGoal(request3)
@@ -120,8 +120,8 @@ class CheckForPeople(State):
             idleVisionChecks(idleVariables.vision_request)
             # go to face position
             request = SendGoalRequest()
-            request.goal, request.speed, request.acceleration, request.tolerance, request.delay = idleVariables.face_joint_angles.angles, idleConstants.general_max_speed, idleConstants.general_max_acceleration, idleConstants.tolerance, 0.01
-            idleOverwriteGoals(request)
+            request.goal, request.type, request.speed, request.acceleration, request.tolerance, request.delay = idleVariables.face_joint_angles.angles, 0, idleConstants.general_max_speed, idleConstants.general_max_acceleration, idleConstants.tolerance, 0.01
+            idleOverwriteGoal(request)
             fb_idle_publisher.publish(1)
         rospy.sleep(idleConstants.sleeptime)
     def next(self):
@@ -189,10 +189,10 @@ if __name__ == '__main__':
         idleFb_check_for_people = rospy.Subscriber("/fb_check_for_people", Int8, idleCallbacks.fb_check_for_people_done)
 
         # init services
-        rospy.wait_for_service('/overwrite_goals')
+        rospy.wait_for_service('/overwrite_goal')
         rospy.wait_for_service('/add_goal')
         rospy.wait_for_service('/vision_checks')
-        idleOverwriteGoals = rospy.ServiceProxy('/overwrite_goals', SendGoal)
+        idleOverwriteGoal = rospy.ServiceProxy('/overwrite_goal', SendGoal)
         idleAddGoal = rospy.ServiceProxy('/add_goal', SendGoal)
         idleVisionChecks = rospy.ServiceProxy('/vision_checks', SetVisionMode)
 

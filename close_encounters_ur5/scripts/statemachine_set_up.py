@@ -41,15 +41,18 @@ class Variables:
 class Requests:
     # a position where the playing fied is completely visible
     check_for_dice_angles = [-2.1188, -1.5585, -1.5440, -1.5046, -4.7562, -1.3496] # to do: check these angles
-    place_a_die_angles = [-2.1188, -1.5585, -1.5440, -1.5046, -4.7562, -1.3496] # to do: update these angles
+    check_for_cup_angles = [-2.0824106, -1.16059, -2.5390597, -0.0665124, -4.364429, -1.5840481] # to do: check these angles
+    place_a_die_angles_0 = [-2.0570381, -1.49767238, -1.844947, -1.063991, -4.778829, -1.608445] # to do: check these angles
+    place_a_die_angles_1 = [-1.765497, -1.32242423, -1.841498, -1.2224, -4.72007, -1.608445] # to do: check these angles
+    place_a_die_angles_2 = [-1.806762, -1.404764, -1.854193, -1.2226, -4.717292, -1.71169] # to do: check these angles
     # a joint angle request ready with constants
     joint_request = SendGoalRequest()
-    joint_request.goal, joint_request.speed, joint_request.acceleration, joint_request.tolerance, joint_request.delay = check_for_dice_angles, Constants().general_max_speed, Constants().general_max_acceleration, Constants().tolerance, Constants().sleeptime
+    joint_request.goal, joint_request.type, joint_request.speed, joint_request.acceleration, joint_request.tolerance, joint_request.delay = check_for_dice_angles, 0, Constants().general_max_speed, Constants().general_max_acceleration, Constants().tolerance, Constants().sleeptime
     # a pose within reach to return to
     defaultPose = [] # to do: add this pose
     # a pose request ready with constants
     pose_request = SendGoalRequest()
-    pose_request.goal, pose_request.speed, pose_request.acceleration, pose_request.tolerance, pose_request.delay = defaultPose, Constants().general_max_speed, Constants().general_max_acceleration, Constants().tolerance, Constants().sleeptime
+    pose_request.goal, pose_request.type, pose_request.speed, pose_request.acceleration, pose_request.tolerance, pose_request.delay = defaultPose, 1, Constants().general_max_speed, Constants().general_max_acceleration, Constants().tolerance, Constants().sleeptime
     
     
 # functions used in state machine
@@ -145,6 +148,20 @@ class GrabADie(State):
     def next(self):
         return SetUpMachine.checkForCup
 
+class MoveToCheckForCup(State):
+    def transitionRun(self):
+        rospy.loginfo("Set up: Moving to check for the cup.")
+        # send move to queue
+        setUpRequests.joint_request.goal = setUpRequests.check_for_cup_angles
+        setUpOverwriteGoal(setUpRequests.joint_request)
+    def mainRun(self):
+        rospy.sleep(setUpConstants.sleeptime)
+    def next(self):
+        if(setUpVariables.fb_move_executor == 1):
+            return SetUpMachine.checkForCup
+        else:
+            return SetUpMachine.moveToCheckForCup
+        
 class CheckForCup(State):
     def transitionRun(self):
         rospy.loginfo("Set up: Checking for the cup.")
@@ -176,12 +193,19 @@ class PlaceADie(State):
     def transitionRun(self):
         rospy.loginfo("Set up: Placing a die.")
         # send to move queue
-        setUpRequests.pose_request.goal = setUpRequests.place_a_die_angles
+        setUpRequests.pose_request.goal = setUpRequests.place_a_die_angles_0
         setUpOverwriteGoal(setUpRequests.pose_request)
+        setUpRequests.pose_request.goal = setUpRequests.place_a_die_angles_1
+        setUpAddGoal(setUpRequests.pose_request)
+        setUpRequests.pose_request.goal = setUpRequests.place_a_die_angles_2
+        setUpAddGoal(setUpRequests.pose_request)
     def mainRun(self):
-        pass
+        rospy.sleep(setUpConstants.sleeptime)
     def next(self):
-        return SetUpMachine.releaseADie
+        if(setUpVariables.fb_move_executor == 3):
+            return SetUpMachine.releaseADie
+        else:
+            return SetUpMachine.placeADie
 
 class ReleaseADie(State):
     def transitionRun(self):
@@ -217,11 +241,11 @@ if __name__ == '__main__':
         setUpFb_move_executor = rospy.Subscriber("/fb_move_executor", Int8, setUpCallbacks.fb_move_executor)
 
         # init services
-        rospy.wait_for_service('/overwrite_goals')
+        rospy.wait_for_service('/overwrite_goal')
         rospy.wait_for_service('/overwrite_pose_goal')
         rospy.wait_for_service('/add_goal')
         rospy.wait_for_service('/add_pose_goal')
-        setUpOverwriteGoal = rospy.ServiceProxy('/overwrite_goals', SendGoal)
+        setUpOverwriteGoal = rospy.ServiceProxy('/overwrite_goal', SendGoal)
         setUpOverwritePoseGoal = rospy.ServiceProxy('/overwrite_pose_goal', SendGoal)
         setUpAddGoal = rospy.ServiceProxy('/add_goal', SendGoal)
         setUpAddPoseGoal = rospy.ServiceProxy('/add_pose_goal', SendGoal)
@@ -233,6 +257,7 @@ if __name__ == '__main__':
         SetUpMachine.checkForDice = CheckForDice()
         SetUpMachine.pickADie = PickADie()
         SetUpMachine.grabADie = GrabADie()
+        SetUpMachine.moveToCheckForCup = MoveToCheckForCup()
         SetUpMachine.checkForCup = CheckForCup()
         SetUpMachine.askForCup = AskForCup()
         SetUpMachine.placeADie = PlaceADie()

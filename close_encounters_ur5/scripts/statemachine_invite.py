@@ -86,8 +86,8 @@ class CheckForPeople(State):
     def transitionRun(self):
         rospy.loginfo("Invite: Checking for people.")
         request = SendGoalRequest()
-        request.goal, request.speed, request.acceleration, request.tolerance, request.delay = inviteVariables.face_joint_angles.angles, inviteConstants.general_max_speed, inviteConstants.general_max_acceleration, inviteConstants.tolerance, 0.01
-        inviteOverwriteGoals(request)
+        request.goal, request.type, request.speed, request.acceleration, request.tolerance, request.delay = inviteVariables.face_joint_angles.angles, 0, inviteConstants.general_max_speed, inviteConstants.general_max_acceleration, inviteConstants.tolerance, 0.01
+        inviteOverwriteGoal(request)
     def mainRun(self):
         rospy.sleep(inviteConstants.debugtime)
         # check for people executed here
@@ -150,10 +150,10 @@ if __name__ == '__main__':
         inviteFace_joint_angles = rospy.Subscriber("/face_joint_angles", AnglesList, inviteCallbacks.face_angles_update)
         
         # init services
-        rospy.wait_for_service('/overwrite_goals')
+        rospy.wait_for_service('/overwrite_goal')
         rospy.wait_for_service('/add_goal')
         rospy.wait_for_service('/vision_checks')
-        inviteOverwriteGoals = rospy.ServiceProxy('/overwrite_goals', SendGoal)
+        inviteOverwriteGoal = rospy.ServiceProxy('/overwrite_goal', SendGoal)
         inviteAddGoal = rospy.ServiceProxy('/add_goal', SendGoal)
         inviteVisionChecks = rospy.ServiceProxy('/vision_checks', SetVisionMode)
         

@@ -65,7 +65,7 @@ class Requests:
     checkScoreAngles = [-2.1188, -1.5585, -1.5440, -1.5046, -4.7562, -1.3496]
     # a request ready with constants and the start position
     request = SendGoalRequest()
-    request.goal, request.speed, request.acceleration, request.tolerance, request.delay = start_joint_angles, Constants().general_max_speed, Constants().general_max_acceleration, Constants().tolerance, Constants().sleeptime
+    request.goal, request.type, request.speed, request.acceleration, request.tolerance, request.delay = start_joint_angles, 0, Constants().general_max_speed, Constants().general_max_acceleration, Constants().tolerance, Constants().sleeptime
     
 # functions used in state machine
 
@@ -321,9 +321,9 @@ if __name__ == '__main__':
         takeTurnFb_move_executor = rospy.Subscriber("/fb_move_executor", Int8, takeTurnCallbacks.fb_move_executor)
 
         # init services
-        rospy.wait_for_service('/overwrite_goals')
+        rospy.wait_for_service('/overwrite_goal')
         rospy.wait_for_service('/add_goal')
-        takeTurnOverwriteGoal = rospy.ServiceProxy('/overwrite_goals', SendGoal)
+        takeTurnOverwriteGoal = rospy.ServiceProxy('/overwrite_goal', SendGoal)
         takeTurnAddGoal = rospy.ServiceProxy('/add_goal', SendGoal)
 
         # instantiate state machine

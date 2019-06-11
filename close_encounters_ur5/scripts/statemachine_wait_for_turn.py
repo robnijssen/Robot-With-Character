@@ -93,13 +93,12 @@ class InviteForTurn(State):
     def transitionRun(self):
         rospy.loginfo("Wait for turn: Inviting player to take a turn.")
         # produce requests for the move queue
-        request0, request1, request2, request3, request4 = SendGoalRequest(), SendGoalRequest(), SendGoalRequest(), SendGoalRequest(), SendGoalRequest()
-        request0.goal, request0.speed, request0.acceleration, request0.tolerance, request0.delay = waitForTurnVariables.face_joint_angles.angles, waitForTurnConstants.general_max_speed, waitForTurnConstants.general_max_acceleration, waitForTurnConstants.tolerance, waitForTurnConstants.sleeptime
-        request1.goal, request1.speed, request1.acceleration, request1.tolerance, request1.delay = waitForTurnConstants.default_cup_position, waitForTurnConstants.general_max_speed, waitForTurnConstants.general_max_acceleration, waitForTurnConstants.tolerance, waitForTurnConstants.sleeptime
-        request2.goal, request2.speed, request2.acceleration, request2.tolerance, request2.delay = waitForTurnConstants.default_tray_position, waitForTurnConstants.general_max_speed, waitForTurnConstants.general_max_acceleration, waitForTurnConstants.tolerance, waitForTurnConstants.sleeptime
-        request3.goal, request3.speed, request3.acceleration, request3.tolerance, request3.delay = waitForTurnVariables.face_joint_angles.angles, waitForTurnConstants.general_max_speed, waitForTurnConstants.general_max_acceleration, waitForTurnConstants.tolerance, waitForTurnConstants.sleeptime
+        request0, request1, request2 = SendGoalRequest(), SendGoalRequest(), SendGoalRequest()
+        request0.goal, request0.type, request0.speed, request0.acceleration, request0.tolerance, request0.delay = waitForTurnVariables.face_joint_angles.angles, 0, waitForTurnConstants.general_max_speed, waitForTurnConstants.general_max_acceleration, waitForTurnConstants.tolerance, waitForTurnConstants.sleeptime
+        request1.goal, request1.type, request1.speed, request1.acceleration, request1.tolerance, request1.delay = waitForTurnConstants.default_cup_position, 0, waitForTurnConstants.general_max_speed, waitForTurnConstants.general_max_acceleration, waitForTurnConstants.tolerance, waitForTurnConstants.sleeptime
+        request2.goal, request2.type, request2.speed, request2.acceleration, request2.tolerance, request2.delay = waitForTurnConstants.default_tray_position, 0, waitForTurnConstants.general_max_speed, waitForTurnConstants.general_max_acceleration, waitForTurnConstants.tolerance, waitForTurnConstants.sleeptime
         # send request list to the move queue
-        waitForTurnOverwriteGoals(request0)
+        waitForTurnOverwriteGoal(request0)
         waitForTurnAddGoal(request1)
         waitForTurnAddGoal(request2)
         waitForTurnAddGoal(request0)
@@ -153,8 +152,8 @@ class GoToScoreCheckingPosition(State):
         # send to move queue
         request = SendGoalRequest()
         goal = [-2.1188, -1.5585, -1.5440, -1.5046, -4.7562, -1.3496]
-        request.goal, request.speed, request.acceleration, request.tolerance, request.delay = goal, waitForTurnConstants.general_max_speed, waitForTurnConstants.general_max_acceleration, waitForTurnConstants.tolerance, waitForTurnConstants.sleeptime
-        waitForTurnOverwriteGoals(request)
+        request.goal, request.type, request.speed, request.acceleration, request.tolerance, request.delay = goal, 0, waitForTurnConstants.general_max_speed, waitForTurnConstants.general_max_acceleration, waitForTurnConstants.tolerance, waitForTurnConstants.sleeptime
+        waitForTurnOverwriteGoal(request)
     def mainRun(self):
         rospy.sleep(waitForTurnConstants.sleeptime * 2)
     def next(self):
@@ -197,10 +196,10 @@ if __name__ == '__main__':
         waitForTurnFace_joint_angles = rospy.Subscriber("/face_joint_angles", AnglesList, waitForTurnCallbacks.face_angles_update)
 
         # init services
-        rospy.wait_for_service('/overwrite_goals')
+        rospy.wait_for_service('/overwrite_goal')
         rospy.wait_for_service('/add_goal')
         rospy.wait_for_service('/vision_checks')
-        waitForTurnOverwriteGoals = rospy.ServiceProxy('/overwrite_goals', SendGoal)
+        waitForTurnOverwriteGoal = rospy.ServiceProxy('/overwrite_goal', SendGoal)
         waitForTurnAddGoal = rospy.ServiceProxy('/add_goal', SendGoal)
         waitForTurnVisionChecks = rospy.ServiceProxy('/vision_checks', SetVisionMode)
 

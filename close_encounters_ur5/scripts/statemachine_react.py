@@ -7,10 +7,8 @@ from state_machine import StateBlueprint as State
 from random import randint
 from std_msgs.msg import Int8
 # import service types
-from close_encounters_ur5.srv import GetJointValues, GetJointValuesRequest, GetJointValuesResponse
-from close_encounters_ur5.srv import SendGoal, SendGoalRequest, SendGoalResponse
-from close_encounters_ur5.srv import SetVisionMode, SetVisionModeRequest, SetVisionModeResponse
-from close_encounters_ur5.msg import AnglesList
+from close_encounters_ur5.srv import *
+from close_encounters_ur5.msg import *
 
 """
 This stays in idle, till it's commanded to do something by the /cmd_state
@@ -147,13 +145,13 @@ class ReactHappy(State):
         reactFunctions.happy_determine_wiggle_values()
         # produce requests for the move queue
         request0, request1, request2, request3, request4 = SendGoalRequest(), SendGoalRequest(), SendGoalRequest(), SendGoalRequest(), SendGoalRequest()
-        request0.goal, request0.speed, request0.acceleration, request0.tolerance, request0.delay = reactVariables.happy_wiggle_start, reactConstants.general_max_speed, reactConstants.general_max_acceleration, reactConstants.tolerance, 0.01
-        request1.goal, request1.speed, request1.acceleration, request1.tolerance, request1.delay = reactVariables.happy_wiggle_left, reactConstants.happy_wiggle_max_speed, reactConstants.happy_wiggle_max_acceleration, reactConstants.tolerance, 0.001
-        request2.goal, request2.speed, request2.acceleration, request2.tolerance, request2.delay = reactVariables.happy_wiggle_right, reactConstants.happy_wiggle_max_speed, reactConstants.happy_wiggle_max_acceleration, reactConstants.tolerance, 0.001
-        request3.goal, request3.speed, request3.acceleration, request3.tolerance, request3.delay = reactVariables.happy_wiggle_left, reactConstants.happy_wiggle_max_speed, reactConstants.happy_wiggle_max_acceleration, reactConstants.tolerance, 0.001
-        request4.goal, request4.speed, request4.acceleration, request4.tolerance, request4.delay = reactVariables.happy_wiggle_start, reactConstants.happy_wiggle_max_speed, reactConstants.happy_wiggle_max_acceleration, reactConstants.tolerance, 0.001
+        request0.goal, request0.type, request0.speed, request0.acceleration, request0.tolerance, request0.delay = reactVariables.happy_wiggle_start, 0, reactConstants.general_max_speed, reactConstants.general_max_acceleration, reactConstants.tolerance, 0.01
+        request1.goal, request1.type, request1.speed, request1.acceleration, request1.tolerance, request1.delay = reactVariables.happy_wiggle_left, 0, reactConstants.happy_wiggle_max_speed, reactConstants.happy_wiggle_max_acceleration, reactConstants.tolerance, 0.001
+        request2.goal, request2.type, request2.speed, request2.acceleration, request2.tolerance, request2.delay = reactVariables.happy_wiggle_right, 0, reactConstants.happy_wiggle_max_speed, reactConstants.happy_wiggle_max_acceleration, reactConstants.tolerance, 0.001
+        request3.goal, request3.type, request3.speed, request3.acceleration, request3.tolerance, request3.delay = reactVariables.happy_wiggle_left, 0, reactConstants.happy_wiggle_max_speed, reactConstants.happy_wiggle_max_acceleration, reactConstants.tolerance, 0.001
+        request4.goal, request4.type, request4.speed, request4.acceleration, request4.tolerance, request4.delay = reactVariables.happy_wiggle_start, 0, reactConstants.happy_wiggle_max_speed, reactConstants.happy_wiggle_max_acceleration, reactConstants.tolerance, 0.001
         # send request list to the move queue
-        reactOverwriteGoals(request0)
+        reactOverwriteGoal(request0)
         reactAddGoal(request1)
         reactAddGoal(request2)
         reactAddGoal(request3)
@@ -208,8 +206,8 @@ class Check(State):
         reactVisionChecks(reactVariables.vision_request)
         # produce and send request for the move queue
         request = SendGoalRequest()
-        request.goal, request.speed, request.acceleration, request.tolerance, request.delay = reactVariables.face_joint_angles.angles, reactConstants.general_max_speed, reactConstants.general_max_acceleration, reactConstants.tolerance, reactConstants.sleeptime
-        reactOverwriteGoals(request)
+        request.goal, request.type, request.speed, request.acceleration, request.tolerance, request.delay = reactVariables.face_joint_angles.angles, 0, reactConstants.general_max_speed, reactConstants.general_max_acceleration, reactConstants.tolerance, reactConstants.sleeptime
+        reactOverwriteGoal(request)
         reactVariables.person_detected = False
     def mainRun(self):
         if reactVariables.distance_to_face > 0:
@@ -257,10 +255,10 @@ if __name__ == '__main__':
         reactFace_joint_angles = rospy.Subscriber("/face_joint_angles", AnglesList, reactCallbacks.face_angles_update)
 
         # init services
-        rospy.wait_for_service('/overwrite_goals')
+        rospy.wait_for_service('/overwrite_goal')
         rospy.wait_for_service('/add_goal')
         rospy.wait_for_service('/vision_checks')
-        reactOverwriteGoals = rospy.ServiceProxy('/overwrite_goals', SendGoal)
+        reactOverwriteGoal = rospy.ServiceProxy('/overwrite_goal', SendGoal)
         reactAddGoal = rospy.ServiceProxy('/add_goal', SendGoal)
         reactVisionChecks = rospy.ServiceProxy('/vision_checks', SetVisionMode)
         
