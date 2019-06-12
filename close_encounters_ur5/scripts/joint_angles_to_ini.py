@@ -21,7 +21,7 @@ moveit_commander.roscpp_initialize(sys.argv)
 group = moveit_commander.MoveGroupCommander("manipulator")
 file_name = raw_input('How do you want to name the file. Name: ')
 
-cfgfile = open("/home/ubuntu/movements/" + file_name + ".ini",'w')
+cfgfile = open("/home/ubuntu/Documents/ini tests/" + file_name + ".ini",'w')
 Config.add_section('Joint_States')
 Config.add_section('Pose_Goals')
 Config.add_section('Amount_Of_Keypoints')
@@ -29,9 +29,11 @@ Config.add_section('Amount_Of_Keypoints')
 index = 0
 
 while not rospy.is_shutdown():
-
     # wait for enter
     raw_input("Press ENTER to print the pose and joint values once.")
+    
+    if rospy.is_shutdown():
+        break
 
     # print current position
     pose = group.get_current_pose().pose

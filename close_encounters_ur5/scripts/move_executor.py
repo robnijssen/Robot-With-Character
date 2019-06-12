@@ -40,13 +40,13 @@ class Functions:
         rospy.loginfo("Move_executor: Executing pose movement.")
         # put the values in the goal
         pose_goal = geometry_msgs.msg.Pose()
-        pose_goal.position.x, pose_goal.position.y, pose_goal.position.z = order.goal[0], oder.goal[1], order.goal[2]
+        pose_goal.position.x, pose_goal.position.y, pose_goal.position.z = order.goal[0], order.goal[1], order.goal[2]
         pose_goal.orientation.x, pose_goal.orientation.y = order.goal[3], order.goal[4]
         pose_goal.orientation.z, pose_goal.orientation.w = order.goal[5], order.goal[6]
         # change the tolerance in two places if it is different
         executorFunctions.check_tolerances(order.tolerance)
         # send the completed goal
-        execute_group.set_pose_target(executorVariables.pose_goal)
+        execute_group.set_pose_target(pose_goal)
         # go to the planned position
         execute_group.go(wait=True)
         # stop movements and publish done
@@ -57,10 +57,22 @@ class Functions:
             executorVariables.waypoints_cleared = False
             executorVariables.waypoints.append(deepcopy(execute_group.get_current_pose().pose))
         waypoint = geometry_msgs.msg.Pose()
-        waypoint.position.x, waypoint.position.y, waypoint.position.z = order.goal[0], oder.goal[1], order.goal[2]
+        waypoint.position.x, waypoint.position.y, waypoint.position.z = order.goal[0], order.goal[1], order.goal[2]
         waypoint.orientation.x, waypoint.orientation.y = order.goal[3], order.goal[4]
         waypoint.orientation.z, waypoint.orientation.w = order.goal[5], order.goal[6]
         executorVariables.waypoints.append(waypoint)
+    def run_carthesian_path(self, order_number):
+        rospy.loginfo("Move_executor: Executing cartesian path.")
+        #   start the path in the waypoints
+        # plan path with the waypoints, interpolated at every 10 cm, and the jump threshold disabled
+        cartesian_plan, fraction = execute_group.compute_cartesian_path(executorVariables.waypoints, 0.01, 0.0)
+        # execute the cartesian path that was planned
+        execute_group.execute(cartesian_plan, wait=True)
+        # clear waypoints
+        executorVariables.waypoints = []
+        executorVariables.waypoints_cleared = True
+        # stop movements and publish done
+        executorFunctions.stop(order_number)
     def check_goal_number(self, number):
         # check if the move number has to be reset
         if number == 1:
@@ -69,18 +81,24 @@ class Functions:
     def check_speed_and_acceleration(self, speed, acceleration):
         # change the max speed and max acceleration if they are different
         if abs(executorVariables.current_speed - speed) > 0.001:
-            execute_group.set_max_velocity_scaling_factor(speed)
-            executorVariables.current_speed = speed
-            rospy.loginfo("Move_executor: Speed changed to " + str(speed))
+            if (speed > 0.01) and (speed < 1):
+                execute_group.set_max_velocity_scaling_factor(speed)
+                executorVariables.current_speed = speed
+                rospy.loginfo("Move_executor: Speed changed to " + str(speed))
+            else:
+                rospy.logwarn("Move_executor: Speed couldn't be changed to " + str(speed))
         if abs(executorVariables.current_acceleration - acceleration) > 0.001:
-            execute_group.set_max_acceleration_scaling_factor(acceleration)
-            executorVariables.current_acceleration = acceleration
-            rospy.loginfo("Move_executor: Acceleration changed to " + str(acceleration))
+            if (acceleration > 0.01) and (acceleration < 1):
+                execute_group.set_max_acceleration_scaling_factor(acceleration)
+                executorVariables.current_acceleration = acceleration
+                rospy.loginfo("Move_executor: Acceleration changed to " + str(acceleration))
+            else:
+                rospy.logwarn("Move_executor: Acceleration couldn't be changed to " + str(acceleration))
     def check_tolerances(self, tolerance):
         # change the tolerance in two places if it is different
         if abs(executorVariables.current_tolerance - tolerance) > 0.001:
-            execute_group.set_goal_orientation_tolerance(order.tolerance)
-            execute_group.set_goal_position_tolerance(order.tolerance)
+            execute_group.set_goal_orientation_tolerance(tolerance)
+            execute_group.set_goal_position_tolerance(tolerance)
             executorVariables.current_tolerance = tolerance
             rospy.loginfo("Move_executor: Tolerance changed to " + str(tolerance))
     def stop(self, number):
@@ -97,7 +115,10 @@ class Callbacks:
         executorFunctions.check_goal_number(order.number)
         # change the max speed and max acceleration if they are different
         executorFunctions.check_speed_and_acceleration(order.speed, order.acceleration)
-        if order.type == 0:
+        # try to execute
+        if list(order.goal) == []:
+            executorFunctions.run_carthesian_path(order.number)
+        elif order.type == 0:
             executorFunctions.execute_joint_movement(order)
         elif order.type == 1:
             executorFunctions.execute_pose_movement(order)
@@ -105,18 +126,6 @@ class Callbacks:
             executorFunctions.add_to_cartesian_path(order)
         else:
             rospy.logfatal("Move_executor: invalid order type.")
-    def run_carthesian_path(self, _):
-        rospy.loginfo("Move_executor: Executing cartesian path.")
-        #   start the path in the waypoints
-        # plan path with the waypoints, interpolated at every 10 cm, and the jump threshold disabled
-        cartesian_plan, fraction = execute_group.compute_cartesian_path(executorVariables.waypoints, 0.1, 0.0)
-        # execute the cartesian path that was planned
-        execute_group.execute(cartesian_plan, wait=True)
-        # clear waypoints
-        executorVariables.waypoints = []
-        executorVariables.waypoints_cleared = True
-        # stop movements and publish done
-        executorFunctions.stop(order.number)
 
 if __name__ == '__main__':
     try:
@@ -144,7 +153,6 @@ if __name__ == '__main__':
 
         # init subscribers to receive commands
         rospy.Subscriber('/execute_movement', ExecuteGoal, executorCallbacks.execute_movement, queue_size=1)
-        rospy.Subscriber('/run_path', Int8, executorCallbacks.run_carthesian_path, queue_size=1)
 
         rospy.loginfo("Move_executor: Ready to take orders.")
 
