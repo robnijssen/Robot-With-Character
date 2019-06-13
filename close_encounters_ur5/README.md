@@ -38,6 +38,11 @@ roslaunch close_encounters_ur5 demo_all.launch
 Running the program on the real arm can be done by setting up the ethernet connection and launching:
 roslaunch close_encounters_ur5 run_all.launch
 
+In case run_all.launch doesn't work, running the individual launch files could help:
+roslaunch ur5 ur5_bringup.launch robot_ip:=192.168.66.3
+roslaunch ur5 ur5_moveit_planning_execution.launch limited:=true robot_ip:=192.168.66.3
+roslaunch ur5 moveit_rviz.launch config:=true robot_ip:=192.168.66.3
+
 To find new joint values to use, launch:
 roslaunch close_encounters_ur5 arm_drivers.launch
 Then move the arm and run:
