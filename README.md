@@ -19,16 +19,16 @@ Make sure to overwrite the files ur_hardware_interface.cpp and ur_ros_wrapper.cp
 
 ## Installing the package 
 
-` cd ~/<your catkin workspace>/src/ 
+` cd ~/<your catkin workspace>/src/ ` 
 
-
-git clone https://github.com/robnijssen/Robot-With-Character.git ` 
+` git clone https://github.com/robnijssen/Robot-With-Character.git ` 
 
 In order to be able to run the scripts in the package, run the following commands:
 
 ` cd ~/<your catkin workspace>/src/ ` 
 
 ` chmod +x *py ` 
+
 Finally, compile your workspace: 
 
 ` cd ~/<your catkin workspace>/ ` 
