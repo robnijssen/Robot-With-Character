@@ -1,9 +1,10 @@
-# Robot-With-Character
-This package contains a control structure for the UR5 robotic arm, made for the Close Encounters project in the Adaptive Robotics minor at Fontys Eindhoven.
+# Close encountes: a robot with character
+This package contains a control structure for the UR5 robotic arm, made for the Close Encounters project in the Adaptive Robotics minor at Fontys Eindhoven 2018/2019.
 
-This contains state machine structure in python files, launch files for launching them, and some handy things like a gripper check and an file creator to record new animations. 
+This package contains the  state machine structure in python files, launch files for launching them, and some handy things like a gripper check and an file creator to record new animations. 
 
-## dependancies:
+## Dependencies
+
 
 https://github.com/ros-industrial/ur_modern_driver.git
 
@@ -15,6 +16,23 @@ or
 https://github.com/robnijssen/Robot-With-Character.git
 
 Make sure to overwrite the files ur_hardware_interface.cpp and ur_ros_wrapper.cpp from this folder to ur_modern_driver/src
+
+## Installing the package 
+
+` cd ~/<your catkin workspace>/src/ ` 
+` git clone https://github.com/LMeeuwsen/<packagename>.git ` 
+
+In order to be able to run the scripts in the package, run the following commands:
+
+` cd ~/<your catkin workspace>/src/ ` 
+
+` chmod +x *py ` 
+Finally, compile your workspace: 
+
+` cd ~/<your catkin workspace>/ ` 
+
+` catkin_make ` 
+
 
 ## Setting up the ethernet connection:
 
@@ -55,7 +73,8 @@ To play back this recorded animation, run the movement test node:
 
 You can either to this with joint goals or by making a cartesian path. Make sure you enter the right path to the map containing the .ini files. 
 
-In our case: ` /home/ubuntu/catkin_ws/src/Robot-With-Character/close_encounters_ur5/inifiles ` 
+In our case:
+` /home/ubuntu/catkin_ws/src/Robot-With-Character/close_encounters_ur5/inifiles ` 
 
 
 
