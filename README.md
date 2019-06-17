@@ -19,7 +19,7 @@ Make sure to overwrite the files ur_hardware_interface.cpp and ur_ros_wrapper.cp
 ## Setting up the ethernet connection:
 
 Plug in a cable from the control box to the computer. If you haven't already: Go to network settings and edit the wired connection that just appeared. Go to IPv4 Settings. Change the method to manual.
-Then go to the Addressess box and make this changes:
+Then go to the Addressess box and make these changes:
 
 Adress: Look at what the robot's ip is. Your ip should have the first two parts the same as the bot and the last one different than the robot, for example: bot's ip is 192.168.66.3, enter 192.168.66.4 as your own.
 
@@ -53,7 +53,9 @@ To play back this recorded animation, run the movement test node:
 
 ` rosrun close_encounters_ur5 movement_test_node.py `
 
-You can either to this with joint goals or by making a cartesian path.
+You can either to this with joint goals or by making a cartesian path. Make sure you enter the right path to the map containing the .ini files. 
+
+In our case: ` /home/ubuntu/catkin_ws/src/Robot-With-Character/close_encounters_ur5/inifiles ` 
 
 
 
