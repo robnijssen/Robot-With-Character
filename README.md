@@ -24,7 +24,7 @@ Make sure to overwrite the files ur_hardware_interface.cpp and ur_ros_wrapper.cp
 
 In order to be able to run the scripts in the package, run the following commands:
 
-` cd ~/<your catkin workspace>/src/ ` 
+` cd ~/<your catkin workspace>/src/Robot-With-Character/close_encounters_ur5/scripts
 
 ` chmod +x *py ` 
 
