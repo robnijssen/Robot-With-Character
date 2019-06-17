@@ -9,7 +9,7 @@
 <launch>
   
   <!-- robot_ip: IP-address of the robot's socket-messaging server -->
-  <arg name="robot_ip" doc="IP of the controller" />
+  <arg name="robot_ip"  default = "192.168.66.3" doc="IP of the controller" />
   <arg name="reverse_port" default="50001" doc="Port on which controller listens for position values passed to servoj thread from the driver" />
   <arg name="limited" default="false" doc="If true, limits joint range [-PI, PI] on all joints." />
   <arg name="min_payload"  default="0.0" doc="lower payload bound for the robot" />
