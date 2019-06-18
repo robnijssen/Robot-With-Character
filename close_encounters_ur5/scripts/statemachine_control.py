@@ -66,7 +66,7 @@ class MainControlMachine(StateMachine):
 
 class Idle(State):
     def transitionRun(self):
-        rospy.loginfo("Control: Idle state should be running now.")
+        rospy.loginfo("CONTROL: Idle state should be running now.")
     def mainRun(self):
         # publish state 0
         cmd_state_publisher.publish(0)
@@ -79,12 +79,12 @@ class Idle(State):
             # person detected within 2 meters
             return MainControlMachine.invite
         else:
-            rospy.logerr("Control: Transition from state idle not found.")
+            rospy.logerr("CONTROL: Transition from state idle not found.")
             return MainControlMachine.idle
 
 class Invite(State):
     def transitionRun(self):
-        rospy.loginfo("Control: Invite people state should be running now.")
+        rospy.loginfo("CONTROL: Invite people state should be running now.")
     def mainRun(self):
         # publish state 1
         cmd_state_publisher.publish(1)
@@ -100,12 +100,12 @@ class Invite(State):
             # no person detected within 2 meters
             return MainControlMachine.idle
         else:
-            rospy.logerr("Control: Transition from state invite not found.")
+            rospy.logerr("CONTROL: Transition from state invite not found.")
             return MainControlMachine.invite
 
 class SetUp(State):
     def transitionRun(self):
-        rospy.loginfo("Control: Set up board state should be running now.")
+        rospy.loginfo("CONTROL: Set up board state should be running now.")
         if controlVariables.turn_number % 2 == 0:
             # end of a round (a round is 2 turns; one for the bot and one for the player)
             if controlVariables.player_score > controlVariables.bot_score:
@@ -145,12 +145,12 @@ class SetUp(State):
             # player walked away
             return MainControlMachine.idle
         else:
-            rospy.logerr("Control: Transition from state set up not found.")
+            rospy.logerr("CONTROL: Transition from state set up not found.")
             return MainControlMachine.setUp
 
 class TakeTurn(State):
     def transitionRun(self):
-        rospy.loginfo("Control: Take my turn state should be running now.")
+        rospy.loginfo("CONTROL: Take my turn state should be running now.")
     def mainRun(self):
         # publish state 3
         cmd_state_publisher.publish(3)
@@ -163,12 +163,12 @@ class TakeTurn(State):
             # done taking turn
             return MainControlMachine.setUp
         else:
-            rospy.logerr("Control: Transition from state take turn not found.")
+            rospy.logerr("CONTROL: Transition from state take turn not found.")
             return MainControlMachine.takeTurn
 
 class WaitForTurn(State):
     def transitionRun(self):
-        rospy.loginfo("Control: Wait for player to take a turn state should be running now.")
+        rospy.loginfo("CONTROL: Wait for player to take a turn state should be running now.")
     def mainRun(self):
         # publish state 4
         cmd_state_publisher.publish(4)
@@ -184,12 +184,12 @@ class WaitForTurn(State):
             # (player's turn finished) and (person within 2 meters)
             return MainControlMachine.setUp
         else:
-            rospy.logerr("Control: Transition from state wait for turn not found.")
+            rospy.logerr("CONTROL: Transition from state wait for turn not found.")
             return MainControlMachine.waitForTurn
 
 class React(State):
     def transitionRun(self):
-        rospy.loginfo("Control: React on outcome should be running now.")
+        rospy.loginfo("CONTROL: React on outcome should be running now.")
     def mainRun(self):
         # publish depending on final score
         cmd_state_publisher.publish(5 + controlVariables.final_score)
@@ -205,7 +205,7 @@ class React(State):
             # (done reacting) and (no person within 2 meter)
             return MainControlMachine.idle
         else:
-            rospy.logerr("Control: Transition from state react not found.")
+            rospy.logerr("CONTROL: Transition from state react not found.")
             return MainControlMachine.react
 
 if __name__ == '__main__':
@@ -214,7 +214,7 @@ if __name__ == '__main__':
         rospy.init_node('statemachine_control_node', anonymous=True)
         # wait 10 seconds to be sure everything started before commands are given
         rospy.sleep(10)
-        rospy.loginfo("statemachine control starting")
+        rospy.loginfo("CONTROL: Node starting.")
 
         # start the publisher for the gripper command
         gripper_publisher = rospy.Publisher('Robotiq2FGripperRobotOutput', outputMsg.Robotiq2FGripper_robot_output, queue_size=1)
@@ -236,7 +236,7 @@ if __name__ == '__main__':
         gripper_command.rPR = 0
         gripper_publisher.publish(gripper_command)
         rospy.sleep(0.2)
-        rospy.loginfo("Control: Gripper activated.")
+        rospy.loginfo("CONTROL: Gripper activated.")
 
         # init /cmd_state publisher
         cmd_state_publisher = rospy.Publisher('/cmd_state', Int8, queue_size=1)

@@ -1,0 +1,16 @@
+<launch>
+    <!-- supporting nodes for the state machines -->
+
+    <!-- move queue node -->
+    <node pkg="close_encounters_ur5" type="move_queue.py" name="move_queue" output="screen"/>
+
+    <!-- move executor node -->
+    <node pkg="close_encounters_ur5" type="move_executor.py" name="move_executor" output="screen"/>
+    
+    <!-- vision node -->
+    <node pkg="close_encounters_ur5" type="vision_node.py" name="vision_node" output="screen"/>
+
+    <!-- memory node -->
+    <node pkg="close_encounters_ur5" type="position_memory.py" name="position_memory_node" output="screen"/>
+
+</launch>

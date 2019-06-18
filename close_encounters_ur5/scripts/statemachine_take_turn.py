@@ -7,8 +7,9 @@ from robotiq_2f_gripper_control.msg import _Robotiq2FGripper_robot_input as inpu
 from state_machine import StateMachineBlueprint as StateMachine
 from state_machine import StateBlueprint as State
 from std_msgs.msg import Int8
-from close_encounters_ur5.srv import SendGoal, SendGoalRequest, SendGoalResponse
-from close_encounters_ur5.msg import AnglesList
+from close_encounters_ur5.srv import *
+from close_encounters_ur5.msg import *
+from ConfigParser import ConfigParser # ini file reading/writing
 
 """
 This stays in idle, till it's commanded to do something by the /cmd_state
@@ -26,12 +27,12 @@ class Constants:
     # time it takes to open/close the gripper
     griptime = 2
     # movement values
-    general_max_speed = 0.1
-    general_max_acceleration = 0.1
+    general_max_speed = 1.0
+    general_max_acceleration = 1.0
     #shake_max_speed = 0.9
     #shake_max_acceleration = 0.9
-    shake_max_speed = 0.1
-    shake_max_acceleration = 0.1
+    shake_max_speed = 1.0
+    shake_max_acceleration = 1.0
     tolerance = 0.001
     
 class Variables:
@@ -40,9 +41,7 @@ class Variables:
     # feedback from the move queue
     fb_move_executor = 0
     # a variable that tells if the cup is currently in frame
-    cup_in_frame = False
-    # a variable for checking if the cup is present
-    cup_detected = False
+    cup_in_frame = 0
     # joint angles where the face was last spotted
     face_joint_angles = [-2.315057341252462, -1.1454232374774378, -2.5245259443866175, 0.5526210069656372, -4.67750066915621, -1.5051539579974573] # for now, default values are in here. to do: change to actual values
     
@@ -84,6 +83,14 @@ class Callbacks:
         gripper_input.gPR = data.gPR
         gripper_input.gPO = data.gPO
         gripper_input.gCU = data.gCU
+    def cup_detected(self, data):
+        takeTurnVariables.cup_in_frame = data.data
+
+class Functions:
+    def read_from_ini(self, section_to_read, key_to_read):
+        goal_string = takeTurnIniHandler.get(str(section_to_read), str(key_to_read))
+        goal_list = map(float, goal_string.split())
+        return goal_list
 
 # state machine
 
@@ -129,17 +136,16 @@ class CheckForCup(State):
         rospy.loginfo("Take turn: Checking for cup.")
     def mainRun(self):
         rospy.sleep(takeTurnConstants.sleeptime)
-        if takeTurnVariables.cup_in_frame == True:
-            # it's spotted while facing the cup stand, so it's assumed to be in place
-            takeTurnVariables.cup_detected = True
     def next(self):
         if takeTurnVariables.fb_move_executor == 1:
-            if takeTurnVariables.cup_detected == True:
-                return TakeTurnMachine.pickCup
-            else:
-                #return TakeTurnMachine.askForCup
-                # for the first simple playthrough, just pick the cup
-                return TakeTurnMachine.pickCup
+            takeTurnVisionChecks(3)
+            for i in range(0, 3):
+                if takeTurnVariables.cup_in_frame == 1:
+                    takeTurnVisionChecks(0)
+                    return TakeTurnMachine.pickCup
+            # if cup wasn't in frame:
+            takeTurnVisionChecks(0)
+            return TakeTurnMachine.askForCup
         else:
             return TakeTurnMachine.checkForCup
 
@@ -286,7 +292,7 @@ if __name__ == '__main__':
     try:
         # start a new node
         rospy.init_node('statemachine_take_turn_node', anonymous=True)
-        rospy.loginfo("take turn actions node starting")
+        rospy.loginfo("Take turn: Node starting.")
 
         # start the publisher for the gripper command
         takeTurnGripperGripperPublisher = rospy.Publisher('Robotiq2FGripperRobotOutput', outputMsg.Robotiq2FGripper_robot_output, queue_size=1)
@@ -311,18 +317,28 @@ if __name__ == '__main__':
 
         takeTurnVariables = Variables()
         takeTurnCallbacks = Callbacks()
+        takeTurnFunctions = Functions()
         takeTurnConstants = Constants()
         takeTurnRequests = Requests()
+
+        # init ini reading/writing
+        takeTurnIniHandler = ConfigParser()
+        takeTurnIniPath = rospy.get_param('~take_turn_path')
+        rospy.loginfo("Take turn: Using file: " + takeTurnIniPath)
+        takeTurnIniHandler.read(takeTurnIniPath)
 
         # init subscribers
         rospy.Subscriber("Robotiq2FGripperRobotInput", inputMsg.Robotiq2FGripper_robot_input, takeTurnCallbacks.getStatus) # Subscribe to the gripper registers to get the status
         gripper_input = inputMsg.Robotiq2FGripper_robot_input()
         takeTurnCmd_state = rospy.Subscriber("/cmd_state", Int8, takeTurnCallbacks.state)
         takeTurnFb_move_executor = rospy.Subscriber("/fb_move_executor", Int8, takeTurnCallbacks.fb_move_executor)
+        rospy.Subscriber('/cup_detected', Int8, takeTurnCallbacks.cup_detected)
 
         # init services
         rospy.wait_for_service('/overwrite_goal')
         rospy.wait_for_service('/add_goal')
+        rospy.wait_for_service('/vision_checks')
+        takeTurnVisionChecks = rospy.ServiceProxy('/vision_checks', SetVisionMode)
         takeTurnOverwriteGoal = rospy.ServiceProxy('/overwrite_goal', SendGoal)
         takeTurnAddGoal = rospy.ServiceProxy('/add_goal', SendGoal)
 

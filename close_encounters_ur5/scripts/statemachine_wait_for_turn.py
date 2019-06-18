@@ -11,6 +11,7 @@ from std_msgs.msg import Int8
 from close_encounters_ur5.srv import SendGoal, SendGoalRequest, SendGoalResponse
 from close_encounters_ur5.srv import SetVisionMode, SetVisionModeRequest, SetVisionModeResponse
 from close_encounters_ur5.msg import AnglesList
+from ConfigParser import ConfigParser # ini file reading/writing
 
 """
 This stays in idle, till it's commanded to do something by the /cmd_state
@@ -30,8 +31,8 @@ class Constants:
     # number of total turns (best out of 3 is max 6 turns)
     max_turns = 6
     # movement values
-    general_max_speed = 0.1
-    general_max_acceleration = 0.1
+    general_max_speed = 1.0
+    general_max_acceleration = 1.0
     tolerance = 0.001
     # default positions
     default_cup_position = [-2.315057341252462, -1.1454232374774378, -2.5245259443866175, 0.5526210069656372, -4.67750066915621, -1.77920324007] # for now, default looking straight in front values are in here. to do: change to actual values
@@ -63,6 +64,12 @@ class Callbacks:
         waitForTurnVariables.distance_to_face = distance.data
     def face_angles_update(self, angles):
         waitForTurnVariables.face_joint_angles.angles = angles.angles
+
+class Functions:
+    def read_from_ini(self, section_to_read, key_to_read):
+        goal_string = waitForTurnIniHandler.get(str(section_to_read), str(key_to_read))
+        goal_list = map(float, goal_string.split())
+        return goal_list
 
 # state machine
 
@@ -177,7 +184,7 @@ if __name__ == '__main__':
     try:
         # start a new node
         rospy.init_node('statemachine_wait_for_turn_node', anonymous=True)
-        rospy.loginfo("wait for turn actions node starting")
+        rospy.loginfo("Wait for turn: Node starting.")
 
         # init publisher for the gripper
         #gripper_command = GripperCommand()
@@ -187,7 +194,14 @@ if __name__ == '__main__':
 
         waitForTurnVariables = Variables()
         waitForTurnCallbacks = Callbacks()
+        waitForTurnFunctions = Functions()
         waitForTurnConstants = Constants()
+
+        # init ini reading/writing
+        waitForTurnIniHandler = ConfigParser()
+        waitForTurnIniPath = rospy.get_param('~wait_for_turn_path')
+        rospy.loginfo("Wait for turn: Using file: " + waitForTurnIniPath)
+        waitForTurnIniHandler.read(waitForTurnIniPath)
 
         # init subscribers
         waitForTurnCmd_state = rospy.Subscriber("/cmd_state", Int8, waitForTurnCallbacks.state)

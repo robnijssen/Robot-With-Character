@@ -6,25 +6,37 @@
         <node pkg="close_encounters_ur5" type="statemachine_control.py" name="statemachine_control" output="screen"/>
 
         <!-- idle node -->
-        <node pkg="close_encounters_ur5" type="statemachine_idle.py" name="statemachine_idle" output="screen"/>
+        <node pkg="close_encounters_ur5" type="statemachine_idle.py" name="statemachine_idle" output="screen">
+            <param name="idle_path" value="$(find close_encounters_ur5)/ini/idle_movements.ini"/>
+        </node>
 
         <!-- invite node -->
-        <node pkg="close_encounters_ur5" type="statemachine_invite.py" name="statemachine_invite" output="screen"/>
+        <node pkg="close_encounters_ur5" type="statemachine_invite.py" name="statemachine_invite" output="screen">
+            <param name="invite_path" value="$(find close_encounters_ur5)/ini/invite_movements.ini"/>
+        </node>
 
         <!-- set up node -->
-        <node pkg="close_encounters_ur5" type="statemachine_set_up.py" name="statemachine_set_up" output="screen"/>
+        <node pkg="close_encounters_ur5" type="statemachine_set_up.py" name="statemachine_set_up" output="screen">
+            <param name="set_up_path" value="$(find close_encounters_ur5)/ini/set_up_movements.ini"/>
+        </node>
 
         <!-- take turn node -->
-        <node pkg="close_encounters_ur5" type="statemachine_take_turn.py" name="statemachine_take_turn" output="screen"/>
+        <node pkg="close_encounters_ur5" type="statemachine_take_turn.py" name="statemachine_take_turn" output="screen">
+            <param name="take_turn_path" value="$(find close_encounters_ur5)/ini/take_turn_movements.ini"/>
+        </node>
 
         <!-- wait for player's turn node -->
-        <node pkg="close_encounters_ur5" type="statemachine_wait_for_turn.py" name="statemachine_wait_for_turn" output="screen"/>
+        <node pkg="close_encounters_ur5" type="statemachine_wait_for_turn.py" name="statemachine_wait_for_turn" output="screen">
+            <param name="wait_for_turn_path" value="$(find close_encounters_ur5)/ini/wait_for_turn_movements.ini"/>
+        </node>
 
         <!-- react node -->
-        <node pkg="close_encounters_ur5" type="statemachine_react.py" name="statemachine_react" output="screen"/>
+        <node pkg="close_encounters_ur5" type="statemachine_react.py" name="statemachine_react" output="screen">
+            <param name="react_path" value="$(find close_encounters_ur5)/ini/react_movements.ini"/>
+        </node>
     </group>
 
-    <!-- service nodes -->
+    <!-- supporting nodes -->
     <group>
         <!-- move queue node -->
         <node pkg="close_encounters_ur5" type="move_queue.py" name="move_queue" output="screen"/>

@@ -11,7 +11,7 @@ This server will just wait and respond to requests from the other nodes.
 class Constants:
     # default position's joint angles
     default_angles = AnglesList()
-    default_angles.angles = [-2.315057341252462, -1.1454232374774378, -2.5245259443866175, 0.5526210069656372, -4.67750066915621, -1.5051539579974573]
+    default_angles.angles = [-2.3151, -1.1454, -2.5245, 0.5526, 1.4817, -1.5052]
     # response ready for SetJointValues services
     res = SetJointValuesResponse()
     res.feedback = True

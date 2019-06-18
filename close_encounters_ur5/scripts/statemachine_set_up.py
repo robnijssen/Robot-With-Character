@@ -8,6 +8,7 @@ from state_machine import StateBlueprint as State
 from std_msgs.msg import Int8
 from close_encounters_ur5.srv import SendGoal, SendGoalRequest, SendGoalResponse
 from close_encounters_ur5.msg import AnglesList
+from ConfigParser import ConfigParser # ini file reading/writing
 
 """
 This stays in idle, till it's commanded to do something by the /cmd_state
@@ -24,8 +25,8 @@ class Constants:
     # time for the gripper to grab/release
     grabtime = 2
     # movement values
-    general_max_speed = 0.1
-    general_max_acceleration = 0.1
+    general_max_speed = 1.0
+    general_max_acceleration = 1.0
     tolerance = 0.001
 
 class Variables:
@@ -67,6 +68,12 @@ class Callbacks:
     def face_angles_update(self, angles):
         setUpVariables.face_joint_angles.angles = angles.angles
 
+class Functions:
+    def read_from_ini(self, section_to_read, key_to_read):
+        goal_string = setUpIniHandler.get(str(section_to_read), str(key_to_read))
+        goal_list = map(float, goal_string.split())
+        return goal_list
+
 # state machine
 
 class SetUpMachine(StateMachine):
@@ -82,11 +89,12 @@ class Idle(State):
         # publish feedback 1 at the end of the cycle
         fb_set_up_publisher.publish(1)
         rospy.sleep(setUpConstants.sleeptime * 2)
+        # publish feedback 0
+        fb_set_up_publisher.publish(0)
+        rospy.sleep(setUpConstants.sleeptime)
         # reset dice in cup
         dice_in_cup = 0
     def mainRun(self):
-        # publish feedback 0
-        fb_set_up_publisher.publish(0)
         rospy.sleep(setUpConstants.sleeptime)
     def next(self):
         if(setUpVariables.cmd_state == 2):
@@ -180,14 +188,10 @@ class AskForCup(State):
     def mainRun(self):
         rospy.sleep(setUpConstants.sleeptime)
     def next(self):
-        """
         if(setUpVariables.fb_move_executor == 1):
             return SetUpMachine.checkForCup
         else:
             return SetUpMachine.askForCup
-        """
-        return SetUpMachine.CheckForCup
-        # to do: check fb_move_executor
 
 class PlaceADie(State):
     def transitionRun(self):
@@ -222,7 +226,7 @@ if __name__ == '__main__':
     try:
         # start a new node
         rospy.init_node('statemachine_set_up_node', anonymous=True)
-        rospy.loginfo("set up actions node starting")
+        rospy.loginfo("Set up: Node starting.")
 
         # start the publisher for the gripper command
         setUpGripperGripperPublisher = rospy.Publisher('Robotiq2FGripperRobotOutput', outputMsg.Robotiq2FGripper_robot_output, queue_size=1)
@@ -234,27 +238,32 @@ if __name__ == '__main__':
         setUpVariables = Variables()
         setUpRequests = Requests()
         setUpCallbacks = Callbacks()
+        setUpFunctions = Functions()
         setUpConstants = Constants()
+
+        # init ini reading/writing
+        setUpIniHandler = ConfigParser()
+        setUpIniPath = rospy.get_param('~set_up_path')
+        rospy.loginfo("Set up: Using file: " + setUpIniPath)
+        setUpIniHandler.read(setUpIniPath)
 
         # init subscribers
         setUpCmd_state = rospy.Subscriber("/cmd_state", Int8, setUpCallbacks.state)
         setUpFb_move_executor = rospy.Subscriber("/fb_move_executor", Int8, setUpCallbacks.fb_move_executor)
+        #setUpNumber_of_dice = rospy.Subscriber("/")
 
         # init services
         rospy.wait_for_service('/overwrite_goal')
-        rospy.wait_for_service('/overwrite_pose_goal')
         rospy.wait_for_service('/add_goal')
-        rospy.wait_for_service('/add_pose_goal')
         setUpOverwriteGoal = rospy.ServiceProxy('/overwrite_goal', SendGoal)
-        setUpOverwritePoseGoal = rospy.ServiceProxy('/overwrite_pose_goal', SendGoal)
         setUpAddGoal = rospy.ServiceProxy('/add_goal', SendGoal)
-        setUpAddPoseGoal = rospy.ServiceProxy('/add_pose_goal', SendGoal)
 
         # instantiate state machine
         #<statemachine_name>.<state_without_capital_letter> = <state_class_name>()
         SetUpMachine.idle = Idle()
         SetUpMachine.goToDiceCheckingPosition = GoToDiceCheckingPosition()
         SetUpMachine.checkForDice = CheckForDice()
+        
         SetUpMachine.pickADie = PickADie()
         SetUpMachine.grabADie = GrabADie()
         SetUpMachine.moveToCheckForCup = MoveToCheckForCup()
@@ -262,6 +271,7 @@ if __name__ == '__main__':
         SetUpMachine.askForCup = AskForCup()
         SetUpMachine.placeADie = PlaceADie()
         SetUpMachine.releaseADie = ReleaseADie()
+        
         SetUpMachine().runAll(0)
 
     except rospy.ROSInterruptException:

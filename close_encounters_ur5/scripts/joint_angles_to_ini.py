@@ -19,6 +19,8 @@ rospy.loginfo("pose/joint printer starting")
 # start moveit
 moveit_commander.roscpp_initialize(sys.argv)
 group = moveit_commander.MoveGroupCommander("manipulator")
+group.set_pose_reference_frame = "/base_link"
+
 file_name = raw_input('How do you want to name the file. Name: ')
 
 cfgfile = open("/home/ubuntu/Documents/ini tests/" + file_name + ".ini",'w')

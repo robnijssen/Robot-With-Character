@@ -10,6 +10,7 @@ from close_encounters_ur5.srv import GetJointValues, GetJointValuesRequest, GetJ
 from close_encounters_ur5.srv import SendGoal, SendGoalRequest, SendGoalResponse
 from close_encounters_ur5.srv import SetVisionMode, SetVisionModeRequest, SetVisionModeResponse
 from close_encounters_ur5.msg import AnglesList
+from ConfigParser import ConfigParser # ini file reading/writing
 
 """
 This stays in idle, till it's commanded to do something by the /cmd_state.
@@ -25,15 +26,9 @@ class Constants:
     sleeptime = 0.1
     # for debugging, play alone delay time
     debugtime = 5
-    # time to track before checking around again
-    #track_time = 15 # high for debugging tracker, ~ 5 for actual running
-    # check for face joint values
-    check_for_face_middle = [-2.315057341252462, -1.1454232374774378, -2.5245259443866175, 0.5526210069656372, -4.67750066915621, -1.5051539579974573]
-    check_for_face_left = [-2.1855948607074183, -1.1591671148883265, -2.5244303385363978, 0.552585244178772, -4.098508659993307, -1.5051539579974573]
-    check_for_face_right = [-2.411642853413717, -1.1589997450457972, -2.523783270512716, 0.552597165107727, -5.275455776845114, -1.5051539579974573]
     # max speed/acceleration
-    general_max_speed = 0.1
-    general_max_acceleration = 0.1
+    general_max_speed = 1.0
+    general_max_acceleration = 1.0
     # tolerance in joints
     tolerance = 0.0001
 
@@ -50,7 +45,7 @@ class Variables:
     fb_move_executor = 0
     # last known face position's joint values
     face_joint_angles = AnglesList()
-    face_joint_angles.angles = [-2.315057341252462, -1.1454232374774378, -2.5245259443866175, 0.5526210069656372, -4.67750066915621, -1.5051539579974573]
+    face_joint_angles.angles = [-2.315057341252462, -1.1454232374774378, -2.5245259443866175, 0.5526210069656372, 1.4817, -1.5051539579974573]
     # prepare request for vision node
     vision_request = SetVisionModeRequest()
     
@@ -67,6 +62,12 @@ class Callbacks:
         idleVariables.face_joint_angles.angles = angles.angles
     def distance_to_face(self, distance):
         idleVariables.distance_to_face = distance.data
+
+class Functions:
+    def read_from_ini(self, section_to_read, key_to_read):
+        goal_string = idleIniHandler.get(str(section_to_read), str(key_to_read))
+        goal_list = map(float, goal_string.split())
+        return goal_list
 
 # state machine
 
@@ -99,19 +100,18 @@ class CheckForPeople(State):
         # tell the vision node to check for faces
         idleVariables.vision_request.mode = 1
         idleVisionChecks(idleVariables.vision_request)
-        # produce requests for the move queue
-        request0, request1, request2, request3, request4 = SendGoalRequest(), SendGoalRequest(), SendGoalRequest(), SendGoalRequest(), SendGoalRequest()
-        request0.goal, request0.type, request0.speed, request0.acceleration, request0.tolerance, request0.delay = idleVariables.face_joint_angles.angles, 0, idleConstants.general_max_speed, idleConstants.general_max_acceleration, idleConstants.tolerance, 0.01
-        request1.goal, request0.type, request1.speed, request1.acceleration, request1.tolerance, request1.delay = idleConstants.check_for_face_middle, 0, idleConstants.general_max_speed, idleConstants.general_max_acceleration, idleConstants.tolerance, 0.01
-        request2.goal, request0.type, request2.speed, request2.acceleration, request2.tolerance, request2.delay = idleConstants.check_for_face_left, 0, idleConstants.general_max_speed, idleConstants.general_max_acceleration, idleConstants.tolerance, 5.0
-        request3.goal, request0.type, request3.speed, request3.acceleration, request3.tolerance, request3.delay = idleConstants.check_for_face_right, 0, idleConstants.general_max_speed, idleConstants.general_max_acceleration, idleConstants.tolerance, 5.0
-        request4.goal, request0.type, request4.speed, request4.acceleration, request4.tolerance, request4.delay = idleConstants.check_for_face_middle, 0, idleConstants.general_max_speed, idleConstants.general_max_acceleration, idleConstants.tolerance, 5.0
-        # send request list to the move queue
-        idleOverwriteGoal(request0)
-        idleAddGoal(request1)
-        idleAddGoal(request2)
-        idleAddGoal(request3)
-        idleAddGoal(request4)
+        # send to move queue
+        request = SendGoalRequest()
+        request.goal, request.type, request.speed, request.acceleration, request.tolerance, request.delay = idleVariables.face_joint_angles.angles, 0, idleConstants.general_max_speed, idleConstants.general_max_acceleration, idleConstants.tolerance, 0.01
+        idleOverwriteGoal(request)
+        request.goal = idleFunctions.read_from_ini('check_for_people_joint', '1')
+        idleAddGoal(request)
+        request.goal = idleFunctions.read_from_ini('check_for_people_joint', '2')
+        idleAddGoal(request)
+        request.goal = idleFunctions.read_from_ini('check_for_people_joint', '3')
+        idleAddGoal(request)
+        request.goal = idleFunctions.read_from_ini('check_for_people_joint', '1')
+        idleAddGoal(request)
     def mainRun(self):
         if idleVariables.distance_to_face > 0:
             idleVariables.person_detected = True 
@@ -169,7 +169,7 @@ if __name__ == '__main__':
     try:
         # start a new node
         rospy.init_node('statemachine_idle_node', anonymous=True)
-        rospy.loginfo("idle actions node starting")
+        rospy.loginfo("Idle: Node starting.")
 
         # init publisher for the gripper
         #gripper_command = GripperCommand()
@@ -179,7 +179,14 @@ if __name__ == '__main__':
 
         idleVariables = Variables()
         idleCallbacks = Callbacks()
+        idleFunctions = Functions()
         idleConstants = Constants()
+
+        # init ini reading/writing
+        idleIniHandler = ConfigParser()
+        idleIniPath = rospy.get_param('~idle_path')
+        rospy.loginfo("Idle: Using file: " + idleIniPath)
+        idleIniHandler.read(idleIniPath)
 
         # init subscribers
         idleCmd_state = rospy.Subscriber("/cmd_state", Int8, idleCallbacks.state)

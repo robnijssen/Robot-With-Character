@@ -12,6 +12,7 @@ from std_msgs.msg import Int8
 from close_encounters_ur5.srv import SendGoal, SendGoalRequest, SendGoalResponse
 from close_encounters_ur5.srv import SetVisionMode, SetVisionModeRequest, SetVisionModeResponse
 from close_encounters_ur5.msg import AnglesList
+from ConfigParser import ConfigParser # ini file reading/writing
 
 """
 This stays in idle, till it's commanded to do something by the /cmd_state
@@ -28,8 +29,8 @@ class Constants:
     # for debugging, time between detecting a face and continuing with the next state
     debugtime = 3
     # movement values
-    general_max_speed = 0.1
-    general_max_acceleration = 0.1
+    general_max_speed = 1.0
+    general_max_acceleration = 1.0
     tolerance = 0.001
 
 
@@ -59,6 +60,12 @@ class Callbacks:
         inviteVariables.distance_to_face = distance.data
     def face_angles_update(self, angles):
         inviteVariables.face_joint_angles.angles = angles.angles
+
+class Functions:
+    def read_from_ini(self, section_to_read, key_to_read):
+        goal_string = inviteIniHandler.get(str(section_to_read), str(key_to_read))
+        goal_list = map(float, goal_string.split())
+        return goal_list
 
 # state machine
 
@@ -127,7 +134,7 @@ if __name__ == '__main__':
     try:
         # start a new node
         rospy.init_node('statemachine_invite_node', anonymous=True)
-        rospy.loginfo("invite actions node starting")
+        rospy.loginfo("Invite: Node starting.")
 
         # start moveit
         #moveit_commander.roscpp_initialize(sys.argv)
@@ -141,7 +148,14 @@ if __name__ == '__main__':
 
         inviteVariables = Variables()
         inviteCallbacks = Callbacks()
+        inviteFunctions = Functions()
         inviteConstants = Constants()
+
+        # init ini reading/writing
+        inviteIniHandler = ConfigParser()
+        inviteIniPath = rospy.get_param('~invite_path')
+        rospy.loginfo("Invite: Using file: " + inviteIniPath)
+        inviteIniHandler.read(inviteIniPath)
 
         # init subscribers
         inviteCmd_state = rospy.Subscriber("/cmd_state", Int8, inviteCallbacks.state)

@@ -9,6 +9,7 @@ from std_msgs.msg import Int8
 # import service types
 from close_encounters_ur5.srv import *
 from close_encounters_ur5.msg import *
+from ConfigParser import ConfigParser # ini file reading/writing
 
 """
 This stays in idle, till it's commanded to do something by the /cmd_state
@@ -25,10 +26,10 @@ class Constants:
     # for debugging, delay time in empty reaction state
     debugtime = 3
     # max speed&acceleration
-    general_max_speed = 0.1
-    general_max_acceleration = 0.1
-    happy_wiggle_max_speed = 0.8
-    happy_wiggle_max_acceleration = 0.8
+    general_max_speed = 1.0
+    general_max_acceleration = 1.0
+    happy_wiggle_max_speed = 1.0
+    happy_wiggle_max_acceleration = 1.0
     # tolerance in joints
     tolerance = 0.001
     # happy wiggle movement distance multipliers
@@ -69,6 +70,10 @@ class Variables:
 # functions used in state machine
 
 class Functions:
+    def read_from_ini(self, section_to_read, key_to_read):
+        goal_string = reactIniHandler.get(str(section_to_read), str(key_to_read))
+        goal_list = map(float, goal_string.split())
+        return goal_list
     def happy_determine_wiggle_values(self):
         # to do: add more variants and a little random
         # calculate corrections for pitch and yaw approximation from the face position
@@ -168,13 +173,34 @@ class ReactHappy(State):
 class ReactSad(State):
     def transitionRun(self):
         rospy.loginfo("React: Reacting sad.")
-        # to do: send sad move here
+        # send sad move
+        request = SendGoalRequest()
+        request.type, request.speed, request.acceleration, request.tolerance, request.delay = reactVariables.happy_wiggle_start, 2, reactConstants.general_max_speed, reactConstants.general_max_acceleration, reactConstants.tolerance, 0.01
+        request.goal = reactFunctions.read_from_ini(sad_pose, 1)
+        reactOverwriteGoal(request)
+        request.goal = reactFunctions.read_from_ini(sad_pose, 2)
+        reactAddGoal(request)
+        request.goal = reactFunctions.read_from_ini(sad_pose, 3)
+        reactAddGoal(request)
+        request.goal = reactFunctions.read_from_ini(sad_pose, 4)
+        reactAddGoal(request)
+        request.goal = reactFunctions.read_from_ini(sad_pose, 5)
+        reactAddGoal(request)
+        request.goal = reactFunctions.read_from_ini(sad_pose, 6)
+        reactAddGoal(request)
+        request.goal = reactFunctions.read_from_ini(sad_pose, 7)
+        reactAddGoal(request)
+        request.goal = reactFunctions.read_from_ini(sad_pose, 8)
+        reactAddGoal(request)
+        request.goal = []
+        reactAddGoal(request)
     def mainRun(self):
         rospy.sleep(reactConstants.sleeptime)
     def next(self):
-        rospy.sleep(reactConstants.debugtime)
-        # to do: check here if sad move is done
-        return ReactMachine.check
+        if reactVariables.fb_move_executor == 1:
+            return ReactMachine.check
+        else:
+            return ReactMachine.reactSad
 
 class Cheat(State):
     def transitionRun(self):
@@ -235,7 +261,7 @@ if __name__ == '__main__':
     try:
         # start a new node
         rospy.init_node('statemachine_react_node', anonymous=True)
-        rospy.loginfo("react actions node starting")
+        rospy.loginfo("React: Node starting.")
 
         # init publisher for the gripper
         #gripper_command = GripperCommand()
@@ -247,6 +273,12 @@ if __name__ == '__main__':
         reactCallbacks = Callbacks()
         reactConstants = Constants()
         reactFunctions = Functions()
+
+        # init ini reading/writing
+        reactIniHandler = ConfigParser()
+        reactIniPath = rospy.get_param('~react_path')
+        rospy.loginfo("React: Using file: " + reactIniPath)
+        reactIniHandler.read(reactIniPath)
 
         # init subscribers
         reactCmd_state = rospy.Subscriber("/cmd_state", Int8, reactCallbacks.state)
