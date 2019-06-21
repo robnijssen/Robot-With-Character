@@ -131,14 +131,18 @@ class DiceMain():
             self.frameRes = cv2.resize(frame, (900, 900))
             self.mask, self.result, self.contourFrame = diceFunctions.contours(self.frameRes)
             self.keypoints = pipCount.countBlobs(self.result)
+            self.amount = pipCount.AmountOfDices(frame)
+            
             # show results
-            #self.showImages()
+            self.showImages()
+            print self.amount
 
     def showImages(self):
-        cv2.imshow("Mask", self.mask)
-        cv2.imshow("Result", self.result)
-        cv2.imshow("keypoints", self.keypoints)
-        cv2.imshow("contours", self.contourFrame)
+        #cv2.imshow("Mask", self.mask)
+        #cv2.imshow("Result", self.result)
+        #cv2.imshow("keypoints", self.keypoints)
+        #cv2.imshow("contours", self.contourFrame)
+        
         
         if cv2.waitKey(1) &0xFF == ord("s"):
             cv2.imwrite("trayWithDiceRes" + str(self.saveCount)+".jpg", self.result)
@@ -168,7 +172,10 @@ class DiceFunctions():
         #maskCircle = np.zeros((900, 900, 3), dtype="uint8")
         res = cv2.bitwise_and(frame, frame, mask=mask)
         resGray = cv2.cvtColor(res, cv2.COLOR_BGR2GRAY)
-        img, contours, hierarchy = cv2.findContours(resGray, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+
+        edge_detected_image = cv2.Canny(resGray, 75, 200)
+
+        img, contours, hierarchy = cv2.findContours(edge_detected_image, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
         contour_list = []
         for c in contours:
             length = cv2.arcLength(c, True)
@@ -181,7 +188,7 @@ class DiceFunctions():
                 diceCalculate.center(box)
                 cv2.drawContours(frame, [box], 0, (0,255,255), 5) # Rotated box
         
-        return mask, res, frame 
+        return mask, res, frame
 
 class DiceCalculate():
     centervar = []
@@ -231,7 +238,60 @@ class DiceCalculate():
 class PipCount():
     readings = [0, 0]
     display = [0, 0]
-    kernel = (5, 5)
+    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (15, 15))
+    kernelOpen = np.ones((5,5))
+    kernelClose = np.ones((20,20))
+    
+
+    def AmountOfDices(self, frame):
+
+        # Emty list to keep track of amount of dices.
+        self.contours_list_dice = []
+
+        # Apply blur to smooth out noise and convert to hsv colorspace.
+        blur = cv2.GaussianBlur(frame, (15, 15), 2)
+        hsv = cv2.cvtColor(blur, cv2.COLOR_BGR2HSV)
+    
+        # Ranges for green.
+        upper_green = np.array([101 , 255, 255])
+        lower_green = np.array([50, 60, 16])
+
+        # Filter the color between upper and lower value.
+        mask = cv2.inRange(hsv, lower_green, upper_green)
+
+        # Image enhancement. 
+        maskClosed = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, self.kernel)
+        maskOpen = cv2.morphologyEx(maskClosed, cv2.MORPH_OPEN, self.kernel)
+        
+        # Apply edge detection.
+        edge_detected_image = cv2.Canny(maskClosed, 75, 175)
+      
+        # Find contours.
+        img, contours, hierarchy = cv2.findContours(edge_detected_image, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+       
+        # Look in the contours that are found.
+        for c in contours:
+            area = cv2.contourArea(c)
+            length = cv2.arcLength(c, True)
+            approx = cv2.approxPolyDP(c, 0.01*length, True)
+            x,y,w,h = cv2.boundingRect(c)
+
+            # Check if contour is dice and keep track of the amount. 
+            if len(approx > 4) and length > 30  and w >25 and h > 25 and w <100 and h < 100 and area >500:
+                cv2.rectangle(frame,(x,y),(x+w,y+h),(0,255,0),2)
+                self.contours_list_dice.append(c)
+                cv2.drawContours(frame, c, 0, (0, 0, 255), 1)
+
+        #cv2.imshow('mask', maskClosed)
+        #cv2.imshow("Dice detected", frame)
+        #cv2.imshow("edge", edge_detected_image)
+        
+        # Return the amount of dices to the main function. 
+        return (len(self.contours_list_dice)/2)
+
+        
+      
+        
 
     def countBlobs(self, frame):
         # Create parameters for blobdetection
@@ -345,7 +405,7 @@ if __name__ == '__main__':
         visionPublishers = Publishers()
 
         # init video feed
-        cap = cv2.VideoCapture(0)
+        cap = cv2.VideoCapture(1)
 
         # take a frame from the video feed for determiniing some initial values
         _, frame = cap.read()
