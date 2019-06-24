@@ -135,16 +135,17 @@ class DiceMain():
             
             # show results
             self.showImages()
-            print self.amount
+            
+            
 
     def showImages(self):
-        #cv2.imshow("Mask", self.mask)
-        #cv2.imshow("Result", self.result)
-        #cv2.imshow("keypoints", self.keypoints)
-        #cv2.imshow("contours", self.contourFrame)
+        cv2.imshow("Mask", self.mask)
+        cv2.imshow("Result", self.result)
+        cv2.imshow("keypoints", self.keypoints)
+        cv2.imshow("contours", self.contourFrame)
         
         
-        if cv2.waitKey(1) &0xFF == ord("s"):
+        """if cv2.waitKey(1) &0xFF == ord("s"):
             cv2.imwrite("trayWithDiceRes" + str(self.saveCount)+".jpg", self.result)
             cv2.imwrite("Keypoints" + str(self.saveCount)+ ".jpg", self.keypoints)
             cv2.imwrite("Contours" + str(self.saveCount)+".jpg", self.contourFrame)
@@ -152,7 +153,7 @@ class DiceMain():
             cv2.imwrite("FrameResized_900X900" + str(self.saveCount) + ".jpg", self.frameRes)
             self.saveCount += 1
             rospy.loginfo("saved image: trayWithDice" + str(self.saveCount) + ".jpg")
-
+            """
 class DiceFunctions():
     def contours(self, frame):
         hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV) # Convert to HSV values
@@ -166,6 +167,7 @@ class DiceFunctions():
         upper_green = np.array([Upper_H, Upper_S, Upper_V])
         lower_green = np.array([Lower_H, Lower_S, Lower_V])
 
+       
         # Filter the color between upper and lower value
         mask = cv2.inRange(hsv, lower_green, upper_green)
 
@@ -173,9 +175,9 @@ class DiceFunctions():
         res = cv2.bitwise_and(frame, frame, mask=mask)
         resGray = cv2.cvtColor(res, cv2.COLOR_BGR2GRAY)
 
-        edge_detected_image = cv2.Canny(resGray, 75, 200)
+        #edge_detected_image = cv2.Canny(resGray, 75, 200)
 
-        img, contours, hierarchy = cv2.findContours(edge_detected_image, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+        img, contours, hierarchy = cv2.findContours(resGray, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
         contour_list = []
         for c in contours:
             length = cv2.arcLength(c, True)
@@ -238,7 +240,8 @@ class DiceCalculate():
 class PipCount():
     readings = [0, 0]
     display = [0, 0]
-    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (15, 15))
+    kernel_dice_count = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (15, 15))
+    kernel = (5, 5)
     kernelOpen = np.ones((5,5))
     kernelClose = np.ones((20,20))
     
@@ -260,8 +263,8 @@ class PipCount():
         mask = cv2.inRange(hsv, lower_green, upper_green)
 
         # Image enhancement. 
-        maskClosed = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, self.kernel)
-        maskOpen = cv2.morphologyEx(maskClosed, cv2.MORPH_OPEN, self.kernel)
+        maskClosed = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, self.kernel_dice_count)
+        maskOpen = cv2.morphologyEx(maskClosed, cv2.MORPH_OPEN, self.kernel_dice_count)
         
         # Apply edge detection.
         edge_detected_image = cv2.Canny(maskClosed, 75, 175)
