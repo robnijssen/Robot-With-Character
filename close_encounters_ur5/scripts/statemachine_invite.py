@@ -80,9 +80,9 @@ class Idle(State):
     def transitionRun(self):
         rospy.loginfo("Invite: Not active.")
     def mainRun(self):
-        rospy.sleep(inviteConstants.sleeptime)
         # publish feedback 0 for debugging (no person within 1 meters)
         fb_invite_publisher.publish(0)
+        rospy.sleep(inviteConstants.sleeptime)
     def next(self):
         if(inviteVariables.cmd_state == 1):
             return InviteMachine.checkForPeople

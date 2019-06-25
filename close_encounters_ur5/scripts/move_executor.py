@@ -28,14 +28,16 @@ class Variables:
     waypoints_cleared = True
 
 class Functions:
+    def start(self, order_number):
+        # publish the start of the move
+        executor_moving.publish(1)
+        fb_move_executor.publish(order_number - 1)
     def execute_joint_movement(self, order):
         rospy.loginfo("Move_executor: Executing joint movement.")
         # compute a plan
         execute_group.set_joint_value_target(order.goal)
         # go to the planned position
         execute_group.go(wait=True)
-        # stop movements and publish done
-        executorFunctions.stop(order.number)
     def execute_pose_movement(self, order):
         rospy.loginfo("Move_executor: Executing pose movement.")
         # put the values in the goal
@@ -49,17 +51,18 @@ class Functions:
         execute_group.set_pose_target(pose_goal)
         # go to the planned position
         execute_group.go(wait=True)
-        # stop movements and publish done
-        executorFunctions.stop(order.number)
     def add_to_cartesian_path(self, order):
         # add to list of waypoints
         if executorVariables.waypoints_cleared == True:
             executorVariables.waypoints_cleared = False
             executorVariables.waypoints.append(deepcopy(execute_group.get_current_pose().pose))
-        waypoint = geometry_msgs.msg.Pose()
-        waypoint.position.x, waypoint.position.y, waypoint.position.z = order.goal[0], order.goal[1], order.goal[2]
-        waypoint.orientation.x, waypoint.orientation.y = order.goal[3], order.goal[4]
-        waypoint.orientation.z, waypoint.orientation.w = order.goal[5], order.goal[6]
+        try:
+            waypoint = geometry_msgs.msg.Pose()
+            waypoint.position.x, waypoint.position.y, waypoint.position.z = order.goal[0], order.goal[1], order.goal[2]
+            waypoint.orientation.x, waypoint.orientation.y = order.goal[3], order.goal[4]
+            waypoint.orientation.z, waypoint.orientation.w = order.goal[5], order.goal[6]
+        except:
+            rospy.logerr("Move_executor: Tried to add the wrong type in a cartesian path (probably a joint goal was tried instead of a pose goal).")
         executorVariables.waypoints.append(waypoint)
     def run_carthesian_path(self, order_number):
         rospy.loginfo("Move_executor: Executing cartesian path.")
@@ -71,13 +74,6 @@ class Functions:
         # clear waypoints
         executorVariables.waypoints = []
         executorVariables.waypoints_cleared = True
-        # stop movements and publish done
-        executorFunctions.stop(order_number)
-    def check_goal_number(self, number):
-        # check if the move number has to be reset
-        if number == 1:
-            rospy.loginfo("Move_executor: Move number reset.")
-        fb_move_executor.publish(number - 1)
     def check_speed_and_acceleration(self, speed, acceleration):
         # change the max speed and max acceleration if they are different
         if abs(executorVariables.current_speed - speed) > 0.001:
@@ -101,27 +97,32 @@ class Functions:
             execute_group.set_goal_position_tolerance(tolerance)
             executorVariables.current_tolerance = tolerance
             rospy.loginfo("Move_executor: Tolerance changed to " + str(tolerance))
-    def stop(self, number):
+    def stop(self, order_number):
         # make sure to stop the residual movements
         execute_group.stop()
         execute_group.clear_pose_targets()
-        # add one to the move number and publish it
-        rospy.loginfo("Move_executor: Goal number " + str(number) + " reached.")
-        fb_move_executor.publish(number)
+        # publish the end of the move
+        rospy.loginfo("Move_executor: Goal number " + str(order_number) + " reached.")
+        executor_moving.publish(0)
+        fb_move_executor.publish(order_number)
 
 class Callbacks:
     def execute_movement(self, order):
-        # check if the move_number needs to be reset
-        executorFunctions.check_goal_number(order.number)
         # change the max speed and max acceleration if they are different
-        executorFunctions.check_speed_and_acceleration(order.speed, order.acceleration)
-        # try to execute
+        #executorFunctions.check_speed_and_acceleration(order.speed, order.acceleration)
+        # check what type should be executed
         if list(order.goal) == []:
+            executorFunctions.start(order.number)
             executorFunctions.run_carthesian_path(order.number)
+            executorFunctions.stop(order.number)
         elif order.type == 0:
+            executorFunctions.start(order.number)
             executorFunctions.execute_joint_movement(order)
+            executorFunctions.stop(order.number)
         elif order.type == 1:
+            executorFunctions.start(order.number)
             executorFunctions.execute_pose_movement(order)
+            executorFunctions.stop(order.number)
         elif order.type == 2:
             executorFunctions.add_to_cartesian_path(order)
         else:
@@ -150,6 +151,11 @@ if __name__ == '__main__':
 
         # init publisher for feedback to higher level nodes
         fb_move_executor = rospy.Publisher('/fb_move_executor', Int8, queue_size=1)
+        executor_moving = rospy.Publisher('/executor_moving', Int8, queue_size=1)
+
+        # publish first value
+        fb_move_executor.publish(0)
+        executor_moving.publish(0)
 
         # init subscribers to receive commands
         rospy.Subscriber('/execute_movement', ExecuteGoal, executorCallbacks.execute_movement, queue_size=1)

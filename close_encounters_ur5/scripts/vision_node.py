@@ -32,8 +32,6 @@ class Publishers:
         face_x_publisher.publish(face_x)
         face_y_publisher.publish(face_y)
         face_d_publisher.publish(face_d)
-    def dice(_, score):
-        dice_score_publisher.publish(score)
 
 class Callbacks:
     def set_vision_checks(self, mode):
@@ -109,7 +107,7 @@ class FaceRecognition:
                             chosen_face = j
                 # draw cross over the the chosen face
                 cv2.line(frame,(x_list[chosen_face], 0),(x_list[chosen_face], visionConstants.res_y),(0,0,255),5)
-                cv2.line(frame,(0, y_list[chosen_face]),(visionConstants.res_y, y_list[chosen_face]),(0,0,255),5)
+                cv2.line(frame,(0, y_list[chosen_face]),(visionConstants.res_x, y_list[chosen_face]),(0,0,255),5)
                 # publish face values
                 visionPublishers.faces(x_list[chosen_face], y_list[chosen_face], d_list[chosen_face])
                 # send x and y to the move queue for processing
@@ -124,7 +122,6 @@ class DiceMain():
     def __init__(self):
         self.mode = False
         self.saveCount = 0
-
     def main(self, frame):
         if self.mode == True:
             # execute the code
@@ -132,19 +129,13 @@ class DiceMain():
             self.mask, self.result, self.contourFrame = diceFunctions.contours(self.frameRes)
             self.keypoints = pipCount.countBlobs(self.result)
             self.amount = pipCount.AmountOfDices(frame)
-            
             # show results
-            self.showImages()
-            
-            
-
+            #self.showImages()
     def showImages(self):
         cv2.imshow("Mask", self.mask)
         cv2.imshow("Result", self.result)
         cv2.imshow("keypoints", self.keypoints)
         cv2.imshow("contours", self.contourFrame)
-        
-        
         """if cv2.waitKey(1) &0xFF == ord("s"):
             cv2.imwrite("trayWithDiceRes" + str(self.saveCount)+".jpg", self.result)
             cv2.imwrite("Keypoints" + str(self.saveCount)+ ".jpg", self.keypoints)
@@ -154,6 +145,7 @@ class DiceMain():
             self.saveCount += 1
             rospy.loginfo("saved image: trayWithDice" + str(self.saveCount) + ".jpg")
             """
+
 class DiceFunctions():
     def contours(self, frame):
         hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV) # Convert to HSV values
@@ -166,40 +158,32 @@ class DiceFunctions():
         Lower_V = 200 #cv2.getTrackbarPos("Lower_V", "trackbars")
         upper_green = np.array([Upper_H, Upper_S, Upper_V])
         lower_green = np.array([Lower_H, Lower_S, Lower_V])
-
-       
         # Filter the color between upper and lower value
         mask = cv2.inRange(hsv, lower_green, upper_green)
-
         #maskCircle = np.zeros((900, 900, 3), dtype="uint8")
         res = cv2.bitwise_and(frame, frame, mask=mask)
         resGray = cv2.cvtColor(res, cv2.COLOR_BGR2GRAY)
-
         #edge_detected_image = cv2.Canny(resGray, 75, 200)
-
         img, contours, hierarchy = cv2.findContours(resGray, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
         contour_list = []
         for c in contours:
             length = cv2.arcLength(c, True)
             approx = cv2.approxPolyDP(c, 0.01*length, True)
             if len(approx == 4) and length > 100 and length < 250:
-                #print length
+                # print length
                 rect = cv2.minAreaRect(c)
                 box = cv2.boxPoints(rect)
                 box = np.int0(box)
                 diceCalculate.center(box)
                 cv2.drawContours(frame, [box], 0, (0,255,255), 5) # Rotated box
-        
         return mask, res, frame
 
 class DiceCalculate():
     centervar = []
     orientationvar = []
-
     def center(self, box):
         if len(self.centervar) >1000:
             self.centervar = [0.0]
-
         point0X = box[0][0]
         point0Y = box[0][1]
         point1X = box[1][0]
@@ -208,18 +192,14 @@ class DiceCalculate():
         point2Y = box[2][1]
         point3X = box[3][0]
         point3Y = box[3][1]
-
         centerX = int((point3X-point1X)/2 + point1X)
         centerY = int((point0Y - point2Y)/2 + point2Y)
-
         self.centervar.append({"x": centerX, "y": centerY})
         self.centervar = self.centervar[-2:]
         self.orientation(box)
-
     def orientation(self, boxPoints):
         if len(self.orientationvar) >1000:
             self.orientationvar = [0.0]
-
         point0X = boxPoints[0][0]
         point0Y = boxPoints[0][1]
         point1X = boxPoints[1][0]
@@ -228,12 +208,10 @@ class DiceCalculate():
         point2Y = boxPoints[2][1]
         point3X = boxPoints[3][0]
         point3Y = boxPoints[3][1]
-
         deltaX = point3X - point0X
         deltaY = point0Y - point3Y
         angleRad = math.atan2(deltaY, deltaX)
         angle = math.degrees(angleRad)
-
         self.orientationvar.append(angleRad)
         self.orientationvar = self.orientationvar[-2:]
 
@@ -244,58 +222,42 @@ class PipCount():
     kernel = (5, 5)
     kernelOpen = np.ones((5,5))
     kernelClose = np.ones((20,20))
-    
-
     def AmountOfDices(self, frame):
-
         # Emty list to keep track of amount of dices.
         self.contours_list_dice = []
-
         # Apply blur to smooth out noise and convert to hsv colorspace.
         blur = cv2.GaussianBlur(frame, (15, 15), 2)
         hsv = cv2.cvtColor(blur, cv2.COLOR_BGR2HSV)
-    
         # Ranges for green.
         upper_green = np.array([101 , 255, 255])
         lower_green = np.array([50, 60, 16])
-
         # Filter the color between upper and lower value.
         mask = cv2.inRange(hsv, lower_green, upper_green)
-
         # Image enhancement. 
         maskClosed = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, self.kernel_dice_count)
         maskOpen = cv2.morphologyEx(maskClosed, cv2.MORPH_OPEN, self.kernel_dice_count)
-        
         # Apply edge detection.
         edge_detected_image = cv2.Canny(maskClosed, 75, 175)
-      
         # Find contours.
         img, contours, hierarchy = cv2.findContours(edge_detected_image, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
-       
         # Look in the contours that are found.
         for c in contours:
             area = cv2.contourArea(c)
             length = cv2.arcLength(c, True)
             approx = cv2.approxPolyDP(c, 0.01*length, True)
             x,y,w,h = cv2.boundingRect(c)
-
             # Check if contour is dice and keep track of the amount. 
             if len(approx > 4) and length > 30  and w >25 and h > 25 and w <100 and h < 100 and area >500:
                 cv2.rectangle(frame,(x,y),(x+w,y+h),(0,255,0),2)
                 self.contours_list_dice.append(c)
                 cv2.drawContours(frame, c, 0, (0, 0, 255), 1)
-
         #cv2.imshow('mask', maskClosed)
         #cv2.imshow("Dice detected", frame)
         #cv2.imshow("edge", edge_detected_image)
-        
         # Return the amount of dices to the main function. 
-        return (len(self.contours_list_dice)/2)
-
-        
-      
-        
-
+        result = (len(self.contours_list_dice)/2)
+        dice_amount_publisher.publish(result)
+        return result
     def countBlobs(self, frame):
         # Create parameters for blobdetection
         parameters = cv2.SimpleBlobDetector_Params()
@@ -306,7 +268,7 @@ class PipCount():
         parameters.minInertiaRatio = 0.5 #minInertia/10
         parameters.maxInertiaRatio = 1.0 #maxInertia/10
         parameters.filterByArea = True
-        parameters.minArea = 20 #minArea 
+        parameters.minArea = 50 #minArea 
         parameters.maxArea = 200 #qmaxArea 
         parameters.filterByCircularity = True
         parameters.filterByConvexity = False
@@ -404,11 +366,12 @@ if __name__ == '__main__':
         face_y_publisher = rospy.Publisher('/vision_face_y', Int16, queue_size=1)
         face_d_publisher = rospy.Publisher('/vision_face_d', Int8, queue_size=1)
         dice_score_publisher = rospy.Publisher('/vision_score', Int8, queue_size=1)
+        dice_amount_publisher = rospy.Publisher('/vision_amount', Int8, queue_size=1)
         cup_detected_publisher = rospy.Publisher('/cup_detected', Int8, queue_size=1)
         visionPublishers = Publishers()
 
         # init video feed
-        cap = cv2.VideoCapture(1)
+        cap = cv2.VideoCapture(-1)
 
         # take a frame from the video feed for determiniing some initial values
         _, frame = cap.read()

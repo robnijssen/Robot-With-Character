@@ -30,6 +30,11 @@
             <param name="wait_for_turn_path" value="$(find close_encounters_ur5)/ini/wait_for_turn_movements.ini"/>
         </node>
 
+        <!-- check score node -->
+        <node pkg="close_encounters_ur5" type="statemachine_check_score.py" name="statemachine_check_score" output="screen">
+            <param name="check_score_path" value="$(find close_encounters_ur5)/ini/check_score_movements.ini"/>
+        </node>
+
         <!-- react node -->
         <node pkg="close_encounters_ur5" type="statemachine_react.py" name="statemachine_react" output="screen">
             <param name="react_path" value="$(find close_encounters_ur5)/ini/react_movements.ini"/>

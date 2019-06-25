@@ -37,7 +37,7 @@ def set_settings(new):
                 section_to_read = 'unchanged'
             check = raw_input('Movement tester: Would you like to change the amount of keys to read? (y/n) ')
             if check == 'y' or check == 'Y' or check == 'yes':
-                keys_to_read = set_section()
+                keys_to_read = set_keys()
             else: 
                 keys_to_read = 'unchanged'
             return file_to_read, type_to_read, section_to_read, keys_to_read

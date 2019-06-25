@@ -136,9 +136,9 @@ class Idle(State):
         fb_react_publisher.publish(0)
         rospy.sleep(reactConstants.sleeptime)
     def next(self):
-        if reactVariables.cmd_state == 5:
+        if reactVariables.cmd_state == 6:
             return ReactMachine.reactHappy
-        elif reactVariables.cmd_state == 6:
+        elif reactVariables.cmd_state == 7:
             return ReactMachine.reactSad
         else:
             return ReactMachine.idle

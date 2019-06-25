@@ -33,8 +33,9 @@ class Variables:
     # a variable to keep track of the turns
     turn_number = 0
     # score variables
+    current_score = 0 # amount of pips currently in frame
     player_score = 0
-    bot_score = 1       # bot_score must be updated via topics later. for now, this makes sure the bot will count 2 wins in a row and move on to react
+    bot_score = 1
     player_total_score = 0
     bot_total_score = 0
     final_score = 0     # 0 = bot won, 1 = bot lost
@@ -54,6 +55,8 @@ class Callbacks:
         controlVariables.waitForTurn_feedback = feedback.data
     def react(self, feedback):
         controlVariables.react_feedback = feedback.data
+    def vision_score(self, score):
+        controlVariables.current_score = score.data
 
 # state machine
 
@@ -66,7 +69,7 @@ class MainControlMachine(StateMachine):
 
 class Idle(State):
     def transitionRun(self):
-        rospy.loginfo("CONTROL: Idle state should be running now.")
+        rospy.loginfo("CONTROL: IDLE")
     def mainRun(self):
         # publish state 0
         cmd_state_publisher.publish(0)
@@ -84,7 +87,8 @@ class Idle(State):
 
 class Invite(State):
     def transitionRun(self):
-        rospy.loginfo("CONTROL: Invite people state should be running now.")
+        rospy.loginfo("CONTROL: INVITE")
+        controlVariables.turn_number = 0
     def mainRun(self):
         # publish state 1
         cmd_state_publisher.publish(1)
@@ -105,32 +109,14 @@ class Invite(State):
 
 class SetUp(State):
     def transitionRun(self):
-        rospy.loginfo("CONTROL: Set up board state should be running now.")
-        if controlVariables.turn_number % 2 == 0:
-            # end of a round (a round is 2 turns; one for the bot and one for the player)
-            if controlVariables.player_score > controlVariables.bot_score:
-                # player won this round
-                controlVariables.player_total_score += 1
-            elif controlVariables.player_score < controlVariables.bot_score:
-                # bot won this round
-                controlVariables.bot_total_score += 1
-            else:
-                # tie
-                # to do: implement tie and replaying the round
-                # for now, the bot will continue without counting this round
-                pass
+        rospy.loginfo("CONTROL: SET UP")
     def mainRun(self):
+        # publish state 2
+        cmd_state_publisher.publish(2)
         rospy.sleep(controlConstants.sleeptime)
     def next(self):
-        if (controlVariables.player_total_score == 2) or (controlVariables.bot_total_score == 2):
-            # player or bot won
-            # reset turn number and move on to react
-            controlVariables.turn_number = 0
-            return MainControlMachine.react
-        elif controlVariables.setUp_feedback == 0:
-            # no winner yet and not done with set up; publish state 2 to set up the board
-            cmd_state_publisher.publish(2)
-            rospy.sleep(controlConstants.sleeptime)
+        if controlVariables.setUp_feedback == 0:
+            # not done with set up --> set up board
             return MainControlMachine.setUp
         elif controlVariables.setUp_feedback == 1:
             # add one to the turn number before checking
@@ -150,7 +136,7 @@ class SetUp(State):
 
 class TakeTurn(State):
     def transitionRun(self):
-        rospy.loginfo("CONTROL: Take my turn state should be running now.")
+        rospy.loginfo("CONTROL: TAKE TURN")
     def mainRun(self):
         # publish state 3
         cmd_state_publisher.publish(3)
@@ -161,14 +147,14 @@ class TakeTurn(State):
             return MainControlMachine.takeTurn
         elif(controlVariables.takeTurn_feedback == 1):
             # done taking turn
-            return MainControlMachine.setUp
+            return MainControlMachine.checkScore
         else:
             rospy.logerr("CONTROL: Transition from state take turn not found.")
             return MainControlMachine.takeTurn
 
 class WaitForTurn(State):
     def transitionRun(self):
-        rospy.loginfo("CONTROL: Wait for player to take a turn state should be running now.")
+        rospy.loginfo("CONTROL: WAIT FOR TURN")
     def mainRun(self):
         # publish state 4
         cmd_state_publisher.publish(4)
@@ -179,20 +165,49 @@ class WaitForTurn(State):
             return MainControlMachine.waitForTurn
         elif(controlVariables.waitForTurn_feedback == 1):
             # no person within 2 meters
-            return MainControlMachine.setUp
+            return MainControlMachine.idle
         elif(controlVariables.waitForTurn_feedback == 2):
             # (player's turn finished) and (person within 2 meters)
-            return MainControlMachine.setUp
+            return MainControlMachine.checkScore
         else:
             rospy.logerr("CONTROL: Transition from state wait for turn not found.")
             return MainControlMachine.waitForTurn
 
+class CheckScore(State):
+    def transitionRun(self):
+        rospy.loginfo("CONTROL: CHECK SCORE")
+    def mainRun(self):
+        # publish state 5
+        cmd_state_publisher.publish(5)
+        rospy.sleep(controlConstants.sleeptime)
+    def next(self):
+        if(controlVariables.waitForTurn_feedback == 0):
+            # not ready determining the score
+            return MainControlMachine.checkScore
+        elif(controlVariables.waitForTurn_feedback > 1):
+            # determined the score
+            if controlVariables.turn_number % 2 != 0:
+                controlVariables.player_score = controlVariables.current_score
+                return MainControlMachine.setUp
+            else:
+                controlVariables.bot_score = controlVariables.current_score
+                if controlVariables.bot_total_score > 2:
+                    controlVariables.final_score = 0
+                    return MainControlMachine.react
+                if controlVariables.player_total_score > 2:
+                    controlVariables.final_score = 1
+                    return MainControlMachine.react
+                return MainControlMachine.setUp
+        else:
+            rospy.logerr("CONTROL: Transition from state check score not found.")
+            return MainControlMachine.checkScore
+
 class React(State):
     def transitionRun(self):
-        rospy.loginfo("CONTROL: React on outcome should be running now.")
+        rospy.loginfo("CONTROL: REACT")
     def mainRun(self):
         # publish depending on final score
-        cmd_state_publisher.publish(5 + controlVariables.final_score)
+        cmd_state_publisher.publish(6 + controlVariables.final_score)
         rospy.sleep(controlConstants.sleeptime)
     def next(self):
         if(controlVariables.react_feedback == 0):
@@ -260,6 +275,7 @@ if __name__ == '__main__':
         MainControlMachine.setUp = SetUp()
         MainControlMachine.takeTurn = TakeTurn()
         MainControlMachine.waitForTurn = WaitForTurn()
+        MainControlMachine.checkScore = CheckScore()
         MainControlMachine.react = React()
         MainControlMachine().runAll(0)
 

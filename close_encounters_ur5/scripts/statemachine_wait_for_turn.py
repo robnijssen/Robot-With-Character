@@ -8,9 +8,9 @@ import rospy
 from state_machine import StateMachineBlueprint as StateMachine
 from state_machine import StateBlueprint as State
 from std_msgs.msg import Int8
-from close_encounters_ur5.srv import SendGoal, SendGoalRequest, SendGoalResponse
-from close_encounters_ur5.srv import SetVisionMode, SetVisionModeRequest, SetVisionModeResponse
-from close_encounters_ur5.msg import AnglesList
+from random import randint
+from close_encounters_ur5.srv import *
+from close_encounters_ur5.msg import *
 from ConfigParser import ConfigParser # ini file reading/writing
 
 """
@@ -49,6 +49,8 @@ class Variables:
     distance_to_face = -1
     # prepare request for vision node
     vision_request = SetVisionModeRequest()
+    # amount of dice in the tray
+    number_of_dice = 0
     # last known face position's joint values
     face_joint_angles = AnglesList()
     face_joint_angles.angles = [-2.315057341252462, -1.1454232374774378, -2.5245259443866175, 0.5526210069656372, -4.67750066915621, -1.77920324007]
@@ -64,6 +66,8 @@ class Callbacks:
         waitForTurnVariables.distance_to_face = distance.data
     def face_angles_update(self, angles):
         waitForTurnVariables.face_joint_angles.angles = angles.angles
+    def number_of_dice(self, data):
+        waitForTurnVariables.number_of_dice = data.data
 
 class Functions:
     def read_from_ini(self, section_to_read, key_to_read):
@@ -83,102 +87,111 @@ class WaitForTurnMachine(StateMachine):
 class Idle(State):
     def transitionRun(self):
         rospy.loginfo("Wait for turn: Not active.")
-        # publish done with waiting for turn
-        fb_wait_for_turn_publisher.publish(1)
-        rospy.sleep(waitForTurnConstants.sleeptime)
+        # turn off the vision
+        waitForTurnVariables.vision_request.mode = 0
+        waitForTurnVisionChecks(waitForTurnVariables.vision_request)
         # publish feedback 0
         fb_wait_for_turn_publisher.publish(0)
+        rospy.sleep(waitForTurnConstants.sleeptime)
     def mainRun(self):
         rospy.sleep(waitForTurnConstants.sleeptime)
     def next(self):
         if waitForTurnVariables.cmd_state == 4:
-            return WaitForTurnMachine.inviteForTurn
+            return WaitForTurnMachine.goToFace
         else:
             return WaitForTurnMachine.idle
 
-class InviteForTurn(State):
+class GoToFace(State):
     def transitionRun(self):
-        rospy.loginfo("Wait for turn: Inviting player to take a turn.")
-        # produce requests for the move queue
-        request0, request1, request2 = SendGoalRequest(), SendGoalRequest(), SendGoalRequest()
-        request0.goal, request0.type, request0.speed, request0.acceleration, request0.tolerance, request0.delay = waitForTurnVariables.face_joint_angles.angles, 0, waitForTurnConstants.general_max_speed, waitForTurnConstants.general_max_acceleration, waitForTurnConstants.tolerance, waitForTurnConstants.sleeptime
-        request1.goal, request1.type, request1.speed, request1.acceleration, request1.tolerance, request1.delay = waitForTurnConstants.default_cup_position, 0, waitForTurnConstants.general_max_speed, waitForTurnConstants.general_max_acceleration, waitForTurnConstants.tolerance, waitForTurnConstants.sleeptime
-        request2.goal, request2.type, request2.speed, request2.acceleration, request2.tolerance, request2.delay = waitForTurnConstants.default_tray_position, 0, waitForTurnConstants.general_max_speed, waitForTurnConstants.general_max_acceleration, waitForTurnConstants.tolerance, waitForTurnConstants.sleeptime
-        # send request list to the move queue
-        waitForTurnOverwriteGoal(request0)
-        waitForTurnAddGoal(request1)
-        waitForTurnAddGoal(request2)
-        waitForTurnAddGoal(request0)
-    def mainRun(self):
-        rospy.sleep(waitForTurnConstants.sleeptime)
-    def next(self):
-        if waitForTurnVariables.fb_move_executor == 4:
-            return WaitForTurnMachine.checkForCup
-        else:
-            return WaitForTurnMachine.inviteForTurn
-
-class CheckForCup(State):
-    def transitionRun(self):
-        rospy.loginfo("Wait for turn: Checking if the cup is picked.")
-        # send to move queue here
-    def mainRun(self):
-        rospy.sleep(waitForTurnConstants.sleeptime)
-    def next(self):
-        if waitForTurnVariables.fb_move_executor == 4:
-            return WaitForTurnMachine.trackCup
-        else:
-            return WaitForTurnMachine.checkForCup
-
-class TrackCup(State):
-    def transitionRun(self):
-        rospy.loginfo("Wait for turn: Tracking the cup in the player's hand.")
-        # send to move queue here
-    def mainRun(self):
-        rospy.sleep(waitForTurnConstants.sleeptime)
-    def next(self):
-        if waitForTurnVariables.fb_move_executor == 4:
-            return WaitForTurnMachine.checkForDice
-        else:
-            return WaitForTurnMachine.trackCup
-
-class CheckForDice(State):
-    def transitionRun(self):
-        rospy.loginfo("Wait for turn: Checking for dice in the tray.")
-        # send to move queue here
-    def mainRun(self):
-        rospy.sleep(waitForTurnConstants.sleeptime)
-    def next(self):
-        if waitForTurnVariables.fb_move_executor == 4:
-            return WaitForTurnMachine.checkScore
-        else:
-            return WaitForTurnMachine.checkForDice
-
-class GoToScoreCheckingPosition(State):
-    def transitionRun(self):
-        rospy.loginfo("Wait for turn: Moving to position for checking score.")
+        rospy.loginfo("Wait for turn: Moving to look at the player.")
         # send to move queue
         request = SendGoalRequest()
-        goal = [-2.1188, -1.5585, -1.5440, -1.5046, -4.7562, -1.3496]
-        request.goal, request.type, request.speed, request.acceleration, request.tolerance, request.delay = goal, 0, waitForTurnConstants.general_max_speed, waitForTurnConstants.general_max_acceleration, waitForTurnConstants.tolerance, waitForTurnConstants.sleeptime
+        request.type, request.speed, request.acceleration, request.tolerance, request.delay = 0, waitForTurnConstants.general_max_speed, waitForTurnConstants.general_max_acceleration, waitForTurnConstants.tolerance, waitForTurnConstants.sleeptime
+        request.goal = waitForTurnVariables.face_joint_angles.angles
         waitForTurnOverwriteGoal(request)
+        # tell vision to look for a face
+        waitForTurnVariables.vision_request.mode = 1
+        waitForTurnVisionChecks(waitForTurnVariables.vision_request)
     def mainRun(self):
-        rospy.sleep(waitForTurnConstants.sleeptime * 2)
-    def next(self):
-        if waitForTurnVariables.fb_move_executor == 1:
-            return WaitForTurnMachine.checkScore
-        else:
-            return WaitForTurnMachine.goToScoreCheckingPosition
-
-class CheckScore(State):
-    def transitionRun(self):
-        rospy.loginfo("Wait for turn: Checking score.")
-    def mainRun(self):
-        # set vision mode to dice recognition for position and score
-        # pass the player score on to control
-        # set vision mode to not check anything
         rospy.sleep(waitForTurnConstants.sleeptime)
     def next(self):
-        return WaitForTurnMachine.idle
+        if waitForTurnVariables.fb_move_executor == 1:
+            return WaitForTurnMachine.goToTray
+        else:
+            return WaitForTurnMachine.goToFace
+
+class GoToTray(State):
+    def transitionRun(self):
+        rospy.loginfo("Wait for turn: Moving to look at the tray.")
+        #
+    def mainRun(self):
+        rospy.sleep(waitForTurnConstants.sleeptime)
+    def next(self):
+        if waitForTurnVariables.fb_move_executor == 1:
+            return WaitForTurnMachine.checkTray
+        else:
+            return WaitForTurnMachine.goToTray
+
+class CheckTray(State):
+    def transitionRun(self):
+        rospy.loginfo("Wait for turn: Checking if there are dice in the tray.")
+        # tell vision to look for dice
+        waitForTurnVariables.vision_request.mode = 2
+        waitForTurnVisionChecks(waitForTurnVariables.vision_request)
+    def mainRun(self):
+        rospy.sleep(waitForTurnConstants.sleeptime)
+    def next(self):
+        if waitForTurnVariables.number_of_dice != 0:
+            return WaitForTurnMachine.goToFaceAsking
+        else:
+            # publish done with waiting for turn and player is still here
+            fb_wait_for_turn_publisher.publish(1)
+            rospy.sleep(waitForTurnConstants.sleeptime)
+            return WaitForTurnMachine.idle
+
+class GoToFaceAsking(State):
+    def transitionRun(self):
+        rospy.loginfo("Wait for turn: Moving to look at the player as if asking.")
+        # send to move queue
+        request = SendGoalRequest()
+        request.type, request.speed, request.acceleration, request.tolerance, request.delay = 0, waitForTurnConstants.general_max_speed, waitForTurnConstants.general_max_acceleration, waitForTurnConstants.tolerance, waitForTurnConstants.sleeptime
+        request.goal = waitForTurnVariables.face_joint_angles.angles
+        waitForTurnOverwriteGoal(request)
+        if randint(0, 1) == 1:
+            request.goal[5] += float(randint(1, 5)) / 10.0
+        else:
+            request.goal[5] -= float(randint(1, 5)) / 10.0
+        waitForTurnAddGoal(request)
+    def mainRun(self):
+        rospy.sleep(waitForTurnConstants.sleeptime)
+    def next(self):
+        if waitForTurnVariables.fb_move_executor == 1:
+            return WaitForTurnMachine.checkForFace
+        else:
+            return WaitForTurnMachine.goToFaceAsking
+
+class CheckForFace(State):
+    def transitionRun(self):
+        rospy.loginfo("Wait for turn: checking if the face is still there.")
+        waitForTurnVariables.person_detected = False
+        # tell vision to look for a face
+        waitForTurnVariables.vision_request.mode = 1
+        waitForTurnVisionChecks(waitForTurnVariables.vision_request)
+    def mainRun(self):
+        if waitForTurnVariables.person_detected > 0:
+            waitForTurnVariables.person_detected = True
+        rospy.sleep(waitForTurnConstants.sleeptime)
+    def next(self):
+        if waitForTurnVariables.fb_move_executor == 2:
+            if waitForTurnVariables.person_detected == True:
+                return WaitForTurnMachine.goToTray
+            else:
+                # publish player walked away
+                fb_wait_for_turn_publisher.publish(1)
+                rospy.sleep(waitForTurnConstants.sleeptime)
+                return WaitForTurnMachine.idle
+        else:
+            return WaitForTurnMachine.checkForFace
 
 if __name__ == '__main__':
     try:
@@ -208,6 +221,7 @@ if __name__ == '__main__':
         waitForTurnFb_move_executor = rospy.Subscriber("/fb_move_executor", Int8, waitForTurnCallbacks.fb_move_executor)
         waitForTurnDistance_to_face = rospy.Subscriber("/vision_face_d", Int8, waitForTurnCallbacks.distance_to_face)
         waitForTurnFace_joint_angles = rospy.Subscriber("/face_joint_angles", AnglesList, waitForTurnCallbacks.face_angles_update)
+        waitForTurnNumber_of_dice = rospy.Subscriber("/vision_number_of_dice", Int8, waitForTurnCallbacks.number_of_dice)
 
         # init services
         rospy.wait_for_service('/overwrite_goal')
@@ -220,12 +234,11 @@ if __name__ == '__main__':
         # instantiate state machine
         #<statemachine_name>.<state_without_capital_letter> = <state_class_name>()
         WaitForTurnMachine.idle = Idle()
-        WaitForTurnMachine.inviteForTurn = InviteForTurn()
-        WaitForTurnMachine.checkForCup = CheckForCup()
-        WaitForTurnMachine.trackCup = TrackCup()
-        WaitForTurnMachine.checkForDice = CheckForDice()
-        WaitForTurnMachine.goToScoreCheckingPosition = GoToScoreCheckingPosition()
-        WaitForTurnMachine.checkScore = CheckScore()
+        WaitForTurnMachine.goToFace = GoToFace()
+        WaitForTurnMachine.goToTray = GoToTray()
+        WaitForTurnMachine.checkTray = CheckTray()
+        WaitForTurnMachine.goToFaceAsking = GoToFaceAsking()
+        WaitForTurnMachine.checkForFace = CheckForFace()
         WaitForTurnMachine().runAll(0)
 
     except rospy.ROSInterruptException:

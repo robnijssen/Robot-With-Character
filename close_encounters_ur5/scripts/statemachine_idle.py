@@ -6,10 +6,8 @@ from state_machine import StateMachineBlueprint as StateMachine
 from state_machine import StateBlueprint as State
 from random import randint
 from std_msgs.msg import Int8
-from close_encounters_ur5.srv import GetJointValues, GetJointValuesRequest, GetJointValuesResponse
-from close_encounters_ur5.srv import SendGoal, SendGoalRequest, SendGoalResponse
-from close_encounters_ur5.srv import SetVisionMode, SetVisionModeRequest, SetVisionModeResponse
-from close_encounters_ur5.msg import AnglesList
+from close_encounters_ur5.srv import *
+from close_encounters_ur5.msg import *
 from ConfigParser import ConfigParser # ini file reading/writing
 
 """
@@ -68,6 +66,10 @@ class Functions:
         goal_string = idleIniHandler.get(str(section_to_read), str(key_to_read))
         goal_list = map(float, goal_string.split())
         return goal_list
+    def random_idle_move(self):
+        random_result = randint(0, 2)
+        if random_result == 0:
+            return IdleMachine.curiousAboutCup
 
 # state machine
 
@@ -81,13 +83,14 @@ class IdleMachine(StateMachine):
 class Idle(State):
     def transitionRun(self):
         rospy.loginfo("Idle: Not active.")
-        rospy.sleep(idleConstants.sleeptime)
         # publish feedback 0
         fb_idle_publisher.publish(0)
+        rospy.sleep(idleConstants.sleeptime)
     def mainRun(self):
-        pass
+        rospy.sleep(idleConstants.sleeptime)
     def next(self):
         if(idleVariables.cmd_state == 0):
+            rospy.sleep(idleConstants.sleeptime)
             return IdleMachine.checkForPeople
         else:
             return IdleMachine.idle
@@ -100,70 +103,223 @@ class CheckForPeople(State):
         # tell the vision node to check for faces
         idleVariables.vision_request.mode = 1
         idleVisionChecks(idleVariables.vision_request)
-        # send to move queue
+        # prepare a request
         request = SendGoalRequest()
         request.goal, request.type, request.speed, request.acceleration, request.tolerance, request.delay = idleVariables.face_joint_angles.angles, 0, idleConstants.general_max_speed, idleConstants.general_max_acceleration, idleConstants.tolerance, 0.01
-        idleOverwriteGoal(request)
-        request.goal = idleFunctions.read_from_ini('check_for_people_joint', '1')
-        idleAddGoal(request)
-        request.goal = idleFunctions.read_from_ini('check_for_people_joint', '2')
-        idleAddGoal(request)
-        request.goal = idleFunctions.read_from_ini('check_for_people_joint', '3')
-        idleAddGoal(request)
-        request.goal = idleFunctions.read_from_ini('check_for_people_joint', '1')
-        idleAddGoal(request)
+        # determine which check to pick randomly
+        random_result = randint(0, 5)
+        if random_result == 0:
+            # check_for_people
+            self.number_of_moves = 2
+            idleOverwriteGoal(request)
+            request.type = 2
+            for i in range(1, 6):
+                request.goal = idleFunctions.read_from_ini('check_for_people_pose', str(i))
+                idleAddGoal(request)
+            request.goal = []
+            idleAddGoal(request)
+        elif random_result == 1:
+            # check_for_people_1
+            self.number_of_moves = 2
+            idleOverwriteGoal(request)
+            request.type = 2
+            for i in range(1, 6):
+                request.goal = idleFunctions.read_from_ini('check_for_people_1_pose', str(i))
+                idleAddGoal(request)
+            request.goal = []
+            idleAddGoal(request)
+        elif random_result == 2:
+            # check_for_people_2
+            self.number_of_moves = 2
+            idleOverwriteGoal(request)
+            request.type = 2
+            for i in range(1, 7):
+                request.goal = idleFunctions.read_from_ini('check_for_people_2_pose', str(i))
+                idleAddGoal(request)
+            request.goal = []
+            idleAddGoal(request)
+        elif random_result == 3:
+            # check_for_people_3
+            self.number_of_moves = 2
+            idleOverwriteGoal(request)
+            request.type = 2
+            for i in range(1, 9):
+                request.goal = idleFunctions.read_from_ini('check_for_people_3_pose', str(i))
+                idleAddGoal(request)
+            request.goal = []
+            idleAddGoal(request)
+        elif random_result == 4:
+            # check_for_people_4
+            self.number_of_moves = 2
+            idleOverwriteGoal(request)
+            request.type = 2
+            for i in range(1, 10):
+                request.goal = idleFunctions.read_from_ini('check_for_people_4_pose', str(i))
+                idleAddGoal(request)
+            request.goal = []
+            idleAddGoal(request)
+        else:
+            # check_for_people_5
+            self.number_of_moves = 2
+            idleOverwriteGoal(request)
+            request.type = 2
+            for i in range(1, 10):
+                request.goal = idleFunctions.read_from_ini('check_for_people_5_pose', str(i))
+                idleAddGoal(request)
+            request.goal = []
+            idleAddGoal(request)
     def mainRun(self):
+        rospy.sleep(idleConstants.sleeptime)
         if idleVariables.distance_to_face > 0:
             idleVariables.person_detected = True 
-            # tell the vision node to stop checking for faces
-            idleVariables.vision_request.mode = 0
-            idleVisionChecks(idleVariables.vision_request)
-            # go to face position
+            # stop and go to face position
             request = SendGoalRequest()
             request.goal, request.type, request.speed, request.acceleration, request.tolerance, request.delay = idleVariables.face_joint_angles.angles, 0, idleConstants.general_max_speed, idleConstants.general_max_acceleration, idleConstants.tolerance, 0.01
             idleOverwriteGoal(request)
-            fb_idle_publisher.publish(1)
-        rospy.sleep(idleConstants.sleeptime)
     def next(self):
         if idleVariables.person_detected == False:
-            if idleVariables.fb_move_executor < 5:
-                # keep going till the fifth move is complete
+            if idleVariables.fb_move_executor != self.number_of_moves:
+                # not done and nobody near --> keep checking
                 return IdleMachine.checkForPeople
-            elif idleVariables.distance_to_face == 0:
-                return IdleMachine.followPeople
             else:
-                # to do: add more possibilities
-                #random_result = randint(0,1)
-                #if random_result == 0:
-                #   ...
-                return IdleMachine.playAlone
+                # tell the vision node to stop checking for faces
+                idleVariables.vision_request.mode = 0
+                idleVisionChecks(idleVariables.vision_request)
+                # go to this state to determine what move to do
+                return IdleMachine.randomSetOfMoves
         else:
-            return IdleMachine.idle
-
-class FollowPeople(State):
-    def transitionRun(self):
-        rospy.loginfo("Idle: Following people for a bit")
-    def mainRun(self):
-        rospy.sleep(idleConstants.sleeptime)
-    def next(self):
-        if idleVariables.distance_to_face > 0:
+            # face detected --> tell the vision node to stop checking for faces
+            idleVariables.vision_request.mode = 0
+            idleVisionChecks(idleVariables.vision_request)
             fb_idle_publisher.publish(1)
             rospy.sleep(idleConstants.sleeptime)
             return IdleMachine.idle
-        elif idleVariables.distance_to_face == 0:
-            return IdleMachine.followPeople
+
+class RandomSetOfMoves(State):
+    def transitionRun(self):
+        rospy.loginfo("Idle: Curious about the cup.")
+        request = SendGoalRequest()
+        request.type, request.speed, request.acceleration, request.tolerance, request.delay = 0, idleConstants.general_max_speed, idleConstants.general_max_acceleration, idleConstants.tolerance, 0.01
+        # determine which movement to execute
+        random_result = randint(0, 8)
+        if random_result == 0:
+            # curious_for_playing_field
+            self.number_of_moves = 2
+            request.goal = idleFunctions.read_from_ini('curious_for_playing_field_joint', '1')
+            idleOverwriteGoal(request)
+            request.type = 2
+            for i in range(2, 8):
+                request.goal = idleFunctions.read_from_ini('curious_for_playing_field_pose', str(i))
+                idleAddGoal(request)
+            request.goal = []
+            idleAddGoal(request)
+        elif random_result == 1:
+            # curious_for_playing_field_1
+            self.number_of_moves = 2
+            request.goal = idleFunctions.read_from_ini('curious_for_playing_field_1_joint', '1')
+            idleOverwriteGoal(request)
+            request.type = 2
+            for i in range(2, 4):
+                request.goal = idleFunctions.read_from_ini('curious_for_playing_field_1_pose', str(i))
+                idleAddGoal(request)
+            request.goal = []
+            idleAddGoal(request)
+        elif random_result == 2:
+            # curious_for_playing_field_1
+            self.number_of_moves = 2
+            request.goal = idleFunctions.read_from_ini('curious_for_playing_field_2_joint', '1')
+            idleOverwriteGoal(request)
+            request.type = 2
+            for i in range(2, 9):
+                request.goal = idleFunctions.read_from_ini('curious_for_playing_field_2_pose', str(i))
+                idleAddGoal(request)
+            request.goal = []
+            idleAddGoal(request)
+        elif random_result == 3:
+            # curious_for_cup
+            self.number_of_moves = 2
+            request = SendGoalRequest()
+            request.type, request.speed, request.acceleration, request.tolerance, request.delay = 0, idleConstants.general_max_speed, idleConstants.general_max_acceleration, idleConstants.tolerance, 0.01
+            request.goal = idleFunctions.read_from_ini('curious_for_cup_joint', '1')
+            idleOverwriteGoal(request)
+            request.type = 2
+            for i in range(2, 8):
+                request.goal = idleFunctions.read_from_ini('curious_for_cup_pose', str(i))
+                idleAddGoal(request)
+            request.goal = []
+            idleAddGoal(request)
+        elif random_result == 4:
+            # curious_for_cup_1
+            self.number_of_moves = 2
+            request = SendGoalRequest()
+            request.type, request.speed, request.acceleration, request.tolerance, request.delay = 0, idleConstants.general_max_speed, idleConstants.general_max_acceleration, idleConstants.tolerance, 0.01
+            request.goal = idleFunctions.read_from_ini('curious_for_cup_1_joint', '1')
+            idleOverwriteGoal(request)
+            request.type = 2
+            for i in range(2, 5):
+                request.goal = idleFunctions.read_from_ini('curious_for_cup_1_pose', str(i))
+                idleAddGoal(request)
+            request.goal = []
+            idleAddGoal(request)
+        elif random_result == 5:
+            # curious_for_cup_2
+            self.number_of_moves = 2
+            request = SendGoalRequest()
+            request.type, request.speed, request.acceleration, request.tolerance, request.delay = 0, idleConstants.general_max_speed, idleConstants.general_max_acceleration, idleConstants.tolerance, 0.01
+            request.goal = idleFunctions.read_from_ini('curious_for_cup_2_joint', '1')
+            idleOverwriteGoal(request)
+            request.type = 2
+            for i in range(2, 7):
+                request.goal = idleFunctions.read_from_ini('curious_for_cup_2_pose', str(i))
+                idleAddGoal(request)
+            request.goal = []
+            idleAddGoal(request)
+        elif random_result == 6:
+            # bored_1
+            self.number_of_moves = 2
+            request = SendGoalRequest()
+            request.type, request.speed, request.acceleration, request.tolerance, request.delay = 0, idleConstants.general_max_speed, idleConstants.general_max_acceleration, idleConstants.tolerance, 0.01
+            request.goal = idleFunctions.read_from_ini('bored_1_joint', '1')
+            idleOverwriteGoal(request)
+            request.type = 2
+            for i in range(2, 6):
+                request.goal = idleFunctions.read_from_ini('bored_1_pose', str(i))
+                idleAddGoal(request)
+            request.goal = []
+            idleAddGoal(request)
+        elif random_result == 7:
+            # bored_3
+            self.number_of_moves = 2
+            request = SendGoalRequest()
+            request.type, request.speed, request.acceleration, request.tolerance, request.delay = 0, idleConstants.general_max_speed, idleConstants.general_max_acceleration, idleConstants.tolerance, 0.01
+            request.goal = idleFunctions.read_from_ini('bored_3_joint', '1')
+            idleOverwriteGoal(request)
+            request.type = 2
+            for i in range(2, 7):
+                request.goal = idleFunctions.read_from_ini('bored_3_pose', str(i))
+                idleAddGoal(request)
+            request.goal = []
+            idleAddGoal(request)
+        else:
+            # flip_cup
+            self.number_of_moves = 2
+            request = SendGoalRequest()
+            request.type, request.speed, request.acceleration, request.tolerance, request.delay = 0, idleConstants.general_max_speed, idleConstants.general_max_acceleration, idleConstants.tolerance, 0.01
+            request.goal = idleFunctions.read_from_ini('flip_cup_joint', '1')
+            idleOverwriteGoal(request)
+            request.type = 2
+            for i in range(2, 9):
+                request.goal = idleFunctions.read_from_ini('flip_cup_pose', str(i))
+                idleAddGoal(request)
+            request.goal = []
+            idleAddGoal(request)
+    def mainRun(self):
+        rospy.sleep(idleConstants.sleeptime)
+    def next(self):
+        if idleVariables.fb_move_executor != self.number_of_moves:
+            return IdleMachine.randomSetOfMoves
         else:
             return IdleMachine.checkForPeople
-
-class PlayAlone(State):
-    def transitionRun(self):
-        rospy.loginfo("Idle: Playing by myself for a bit")
-    def mainRun(self):
-        # to do: add the playing by myself move here
-        # wait for a bit
-        rospy.sleep(idleConstants.debugtime)
-    def next(self):
-        return IdleMachine.checkForPeople
 
 if __name__ == '__main__':
     try:
@@ -207,8 +363,7 @@ if __name__ == '__main__':
         #<statemachine_name>.<state_without_capital_letter> = <state_class_name>()
         IdleMachine.idle = Idle()
         IdleMachine.checkForPeople = CheckForPeople()
-        IdleMachine.followPeople = FollowPeople()
-        IdleMachine.playAlone = PlayAlone()
+        IdleMachine.randomSetOfMoves = RandomSetOfMoves()
         IdleMachine().runAll(0)
 
     except rospy.ROSInterruptException:

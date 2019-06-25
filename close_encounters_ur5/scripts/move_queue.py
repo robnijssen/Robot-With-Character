@@ -17,16 +17,60 @@ This program takes orders with goals, speeds, accelerations, and tolerances.
 When it's got an order, it'll tell move_executor to execute it.
 Orders list can be either added to or overwritten.
 """
+
+class Queue:
+    def __init__(self):
+        # prepare the list of orders from the created type
+        self._orders = []
+        # keep track of the order_number
+        self._next_order_number = 1
+        self._current_order_number = 0
+    def clear(self):
+        # delete all items from the queue
+        del self._orders[:]
+        # reset the order number
+        self._next_order_number = 1
+    def len(self):
+        return len(self._orders)
+    def take(self):
+        # get the first item from the queue and delete it afterwards
+        try:
+            item = self._orders[0]
+            self._current_order_number = item.number
+            del self._orders[0]
+            return (item)
+        except IndexError:
+            rospy.logwarn("Move_queue: order was overwritten before sending an order was completed.")
+    def append(self, val):
+        # prepare the new order to add to the order list
+        new_order = ExecuteGoal()
+        new_order.number = self._next_order_number
+        new_order.goal = list(val.goal)
+        new_order.type = int(val.type)
+        new_order.tolerance = float(val.tolerance)
+        # only increment the order number if it's a seperate order
+        # a cartesian path is counted as a single order
+        if val.type != 2 or list(val.goal) == []:
+            self._next_order_number += 1
+        # add the order that was just converted
+        self._orders.append(new_order)
+    def next_type(self):
+        return self._orders[0].type
+    def current_number(self):
+        return self._current_order_number
+    def check_for_go_command(self):
+        length = len(self._orders)
+        if length < 2:
+            # no go command can be given with less than 2 items in the queue
+            return 0
+        for i in range(0, length):
+            if list(self._orders[i].goal) == []:
+                # go command was found at position i (must be greater than 0)
+                return int(i)
+        # if a return wasn't triggered here, there was no go command
+        return 0
     
 class Variables:
-    # prepare empty list for the goals supplied later
-    goals = []
-    types = []
-    speeds = []
-    accelerations = []
-    tolerances = []
-    delays = []
-    orders = [goals, types, speeds, accelerations, tolerances, delays]
     # prepare a variable for sending to the move executor
     current_order = ExecuteGoal()
     # type declaration
@@ -40,145 +84,78 @@ class Variables:
     current_face_angles = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
     current_cup_angles = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
     # time to sleep after publishing
-    sleeptime = 0.05
+    sleeptime = 0.08
     # a variable to keep track of if the bot is moving at the moment
-    moving = False
+    moving = 0
     
 class Functions:
-    def prepare_overwriting(self):
-        # reset the counters for order number
-        queueVariables.current_order.number = 0
-        # delete all items from the order list
-        queueFunctions.delete_orders()
-        # stop the current movements
-        group.stop()
-        group.clear_pose_targets()
-    def delete_orders(self):
-        # clear the full order list
-        del queueVariables.orders[0][:]
-        del queueVariables.orders[1][:]
-        del queueVariables.orders[2][:]
-        del queueVariables.orders[3][:]
-        del queueVariables.orders[4][:]
-        del queueVariables.orders[5][:]
-    def execute_upon_add_order_check(self):
-        if queueVariables.moving == False:
-            if len(queueVariables.orders[1]) == 1:
-                # only the newly added order is in the list
-                if queueVariables.orders[1][0] != 2:
-                    # joint/pose goal should be executed
-                    queueVariables.moving = True
-                    queueFunctions.update_current_order()
-                # else: one cartesian waypoint is in the list, but no go command
-            else: # length must be greater than 1 --> must be cartesian path
-                if (list(queueVariables.orders[0][len(queueVariables.orders[0]) - 1]) == []) or (queueVariables.orders[1][len(queueVariables.orders[1]) - 1] != 2):
-                    # path is complete --> add waypoints and then run as a cartesian path
-                    queueVariables.moving = True
-                    queueFunctions.start_cartesian_path()
-                # else: path is incomplete --> don't do anything
-    def start_cartesian_path(self):
-        #   send the cartesian path goals
-        start_length = len(queueVariables.orders[1])
-        queueVariables.current_order.number += 1
-        for i in range(0, start_length):
-            if queueVariables.orders[1][0] != 2: # end of the (first) cartesian part of the queue
-                break
-            elif list(queueVariables.orders[0][0]) == []: # explicit start command (and end of the (first) cartesian part of the queue)
-                # delete the empty waypoint, shifting the next waypoint/order into position 0
-                del queueVariables.orders[0][0]
-                del queueVariables.orders[1][0]
-                del queueVariables.orders[2][0]
-                del queueVariables.orders[3][0]
-                del queueVariables.orders[4][0]
-                del queueVariables.orders[5][0]
-                break
-            else:
-                # prepare waypoint to send
-                queueVariables.current_order.goal = queueVariables.orders[0][0]
-                queueVariables.current_order.type = queueVariables.orders[1][0]
-                queueVariables.current_order.speed = queueVariables.orders[2][0]
-                queueVariables.current_order.acceleration = queueVariables.orders[3][0]
-                queueVariables.current_order.tolerance = queueVariables.orders[4][0]
-                # send the waypoint
-                execute_movement.publish(queueVariables.current_order)
-                rospy.sleep(queueVariables.sleeptime)
-                # delete order number 0 from the list, shifting the next waypoint into position 0
-                del queueVariables.orders[0][0]
-                del queueVariables.orders[1][0]
-                del queueVariables.orders[2][0]
-                del queueVariables.orders[3][0]
-                del queueVariables.orders[4][0]
-                del queueVariables.orders[5][0]
-        # send an empty list to make the executor start running a cartesian path
-        queueVariables.current_order.goal = []
-        execute_movement.publish(queueVariables.current_order)
-        rospy.sleep(queueVariables.sleeptime)
-    def update_current_order(self):
-        queueVariables.moving = True
-        # prepare values to run the order
-        queueVariables.current_order.number += 1
-        queueVariables.current_order.goal = queueVariables.orders[0][0]
-        queueVariables.current_order.type = queueVariables.orders[1][0]
-        queueVariables.current_order.speed = queueVariables.orders[2][0]
-        queueVariables.current_order.acceleration = queueVariables.orders[3][0]
-        queueVariables.current_order.tolerance = queueVariables.orders[4][0]
-        # delete order number 0 from the list, shifting the next order into position 0, and making sure it isn't run again
-        del queueVariables.orders[0][0]
-        del queueVariables.orders[1][0]
-        del queueVariables.orders[2][0]
-        del queueVariables.orders[3][0]
-        del queueVariables.orders[4][0]
-        del queueVariables.orders[5][0]
-        # run the order
-        execute_movement.publish(queueVariables.current_order)
+    def stop(self):
+        # make the move_executor and move_group both stop to be able to go on with the next movement without much lag
+        queue_group.stop()
+        queue_group.clear_pose_targets()
+    def start_cartesian_path(self, go_index):
+        # publish the waypoints and start command in sequence
+        for i in range(0, go_index + 1):
+            execute_movement.publish(queue.take())
+            rospy.sleep(queueVariables.sleeptime)
+    def start_single_goal(self):
+        # publish a single order
+        execute_movement.publish(queue.take())
         rospy.sleep(queueVariables.sleeptime)
     def determine_angles(self, x, y):
         # to do: add corrections using the x and y supplied by the vision node
-        return group.get_current_joint_values()
+        return queue_group.get_current_joint_values()
 
 class Callbacks:
-    def overwrite_orders(self, overwrite_orders):
-        rospy.loginfo("Move_queue: Orders overwritten.")
-        # reset move number, delete order list, execute upon add_order, and stop current movements
-        queueFunctions.prepare_overwriting()
-        # populate the list with the new goals and settings
-        queueCallbacks.add_order(overwrite_orders)
-        return queueVariables.goal_response
-    def add_order(self, add_orders):
-        # append to lists
-        queueVariables.orders[0].append(add_orders.goal)
-        queueVariables.orders[1].append(add_orders.type)
-        queueVariables.orders[2].append(add_orders.speed)
-        queueVariables.orders[3].append(add_orders.acceleration)
-        queueVariables.orders[4].append(add_orders.tolerance)
-        queueVariables.orders[5].append(add_orders.delay)
-        # check if the added order needs to be executed now
-        queueFunctions.execute_upon_add_order_check()
-        return queueVariables.goal_response
-    def order_completed(self, order_number):
-        # check if the order isn't just being reset
-        if order_number.data == queueVariables.current_order.number:
-            # publish a new order if available
-            if len(queueVariables.orders[1]) == 0:
-                rospy.loginfo("Move_queue: Waiting for a new order to be added.")
-                queueVariables.moving = False
-            elif queueVariables.orders[1][0] != 2:
-                # joint/pose goal should be executed
-                queueFunctions.update_current_order()
+    def overwrite_orders(self, new_order):
+        # clear the orders before adding new ones
+        queue.clear()
+        # append an order to the queue
+        queue.append(new_order)
+        # stop the move group
+        queueFunctions.stop()
+        # start the new order if it's a joint/pose goal
+        if queue.next_type() == 0 or queue.next_type() == 1:
+            rospy.loginfo("Move_queue: Starting a joint or pose goal from overwrite orders.")
+            queueFunctions.start_single_goal()
+        else:
+            rospy.loginfo("Move_queue: Waiting for a go command for this cartesian path in overwrite orders.")
+        return True
+    def add_order(self, new_order):
+        # append an order to the queue
+        queue.append(new_order)
+        # start if not moving
+        if not queueVariables.moving:
+            # start the new order if it's a joint/pose goal
+            if queue.next_type() == 0 or queue.next_type() == 1:
+                rospy.loginfo("Move_queue: Starting a joint or pose goal from add_order.")
+                queueFunctions.start_single_goal()
+                return True
+            # start a cartesian path if a go command was added just now
+            if list(new_order.goal) == []:
+                rospy.loginfo("Move_queue: Starting a cartesian path from add_order.")
+                queueFunctions.start_cartesian_path(queue.check_for_go_command())
             else:
-                # cartesian --> check the orders for a go command
-                complete = False
-                for i in range(0, len(queueVariables.orders[1])):
-                    if queueVariables.orders[0][i] == []:
-                        complete = True
-                    elif queueVariables.orders[1][i] != 2:
-                        complete = True
-                if complete == True:
-                    # path is complete --> add waypoints and then run as a cartesian path
-                    queueFunctions.start_cartesian_path()
+                rospy.loginfo("Move_queue: Cartesian waypoint added. Still waiting for a go command.")
+        return True
+    def order_completed(self, order_number):
+        # check if there's a new order available
+        if order_number.data == queue.current_number():
+            if queue.len() != 0:
+                # start the new order if it's a joint/pose goal
+                if queue.next_type() == 0 or queue.next_type() == 1:
+                    rospy.loginfo("Move_queue: Starting a joint or pose goal from order_completed.")
+                    queueFunctions.start_single_goal()
+                    return
+                # start a cartesian path if a go command is in the queue
+                go_index = queue.check_for_go_command()
+                if go_index != 0:
+                    rospy.loginfo("Move_queue: Starting a cartesian path from order_completed.")
+                    queueFunctions.start_cartesian_path(go_index)
                 else:
-                    rospy.loginfo("Move_queue: Waiting for a new order to be added.")
-                    queueVariables.moving = False
+                    rospy.loginfo("Move_queue: Waiting for a cartesian go command to be added in order_completed.")
+            else:
+                rospy.loginfo("Move_queue: Waiting for a new order to be added.")
     def set_face_position(self, coordinates):
         # determine angles from position in frame and current angles
         determined_joint_angles = SetJointValuesRequest()
@@ -197,6 +174,8 @@ class Callbacks:
             setCupAngles(determined_joint_angles)
             queueVariables.current_cup_angles = determined_joint_angles.angles
         return queueVariables.position_response
+    def executor_moving(self, data):
+        queueVariables.moving = data.data
 
 if __name__ == '__main__':
     try:
@@ -204,20 +183,22 @@ if __name__ == '__main__':
         rospy.init_node('move_queue_node', anonymous=True)
         rospy.loginfo("move queue starting")
 
+        # init classes
+        queue = Queue()
+        queueVariables = Variables()
+        queueFunctions = Functions()
+        queueCallbacks = Callbacks()
+
         # start moveit
         moveit_commander.roscpp_initialize(sys.argv)
-        group = moveit_commander.MoveGroupCommander("manipulator")
-
-        # init classes
-        queueVariables = Variables()
-        queueCallbacks = Callbacks()
-        queueFunctions = Functions()
+        queue_group = moveit_commander.MoveGroupCommander("manipulator")
 
         # init publisher to command the move executor
         execute_movement = rospy.Publisher('/execute_movement', ExecuteGoal, queue_size=1)
 
         # init subscriber to check the feedback from the move_executor
         rospy.Subscriber('/fb_move_executor', Int8, queueCallbacks.order_completed)
+        rospy.Subscriber('/executor_moving', Int8, queueCallbacks.executor_moving)
 
         # init services
         rospy.Service('/overwrite_goal', SendGoal, queueCallbacks.overwrite_orders)
@@ -236,10 +217,10 @@ if __name__ == '__main__':
         # sleep till called or shutdown
         rospy.spin()
 
-        # stop the movements and clear goals
+        # stop the movements and clear goals (automatically stops the move_executor this way)
         rospy.loginfo("Move_queue: Stopping movements.")
-        group.stop()
-        group.clear_pose_targets()
+        queue_group.stop()
+        queue_group.clear_pose_targets()
 
     except rospy.ROSInterruptException:
         pass
