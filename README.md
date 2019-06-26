@@ -1,9 +1,9 @@
 # Close encountes: a robot with character
 This package contains a control structure for the UR5 robotic arm, made for the Close Encounters project in the Adaptive Robotics minor at Fontys Eindhoven 2018/2019.
 
-This package contains the  state machine structure in python files, launch files for launching them, and some handy things like a gripper check and an file creator to record new animations. 
+This package contains the state machine structure in python files, launch files for launching them, and some handy things like a gripper check and an file creator to record new animations. 
 
-## Dependencies
+## Dependencies:
 ` cd ~/<your catkin workspace>/src/ ` 
 
 ` git clone <links below> ` 
@@ -17,7 +17,7 @@ https://github.com/robnijssen/Robot-With-Character.git
 Make sure to overwrite the files ur_hardware_interface.cpp and ur_ros_wrapper.cpp from this folder to ur_modern_driver/src
 
 
-## Installing the package 
+## Installing the package:
 
 ` cd ~/<your catkin workspace>/src/ ` 
 
@@ -36,7 +36,7 @@ Finally, compile your workspace:
 ` catkin_make ` 
 
 
-## Setting up the ethernet connection:
+## Setting up the ethernet connection to the UR5:
 
 Plug in a cable from the control box to the computer. If you haven't already: Go to network settings and edit the wired connection that just appeared. Go to IPv4 Settings. Change the method to manual.
 Then go to the Addressess box and make these changes:
