@@ -65,42 +65,6 @@ In case run_all.launch doesn't work, running the individual launch files could h
 
 ` roslaunch ur5 moveit_rviz.launch config:=true robot_ip:=192.168.66.3 ` 
 
-## Record and play back movements
-
-If you want to implement more of your own movements, the easiest way is to create a new sequence of pose goals and play it back. After testing the multiple options MOVEIT gives you (joints states, pose goals and cartesian paths), we found out you get the most smooth motion if you plan and execute a cartesian path.
-
-We created a program the eases the process of creating new movements. What this program does is save the current joints states and end effector pose (x, y, z, rx, ry, rz, w). By free jogging the arm and pressing ENTER you can create a new file that contains your recorded sequence. 
-
-If you want more information about this filetype and how to use it in python, please take a look at this link. 
-
-https://docs.python.org/3/library/configparser.html 
-
-### How to record a new animation
-To create a new .ini fil
-` roslaunch close_encounters_ur5 arm_drivers.launch ` 
-e containing an animation with either joint values or pose values, launch: 
-
-After that, run:
-
-` rosrun close_encounters_ur5 joint_angles_to_ini.py `
-
-The program will guide you trough the process. Make sure the actual robot state shows up in rviz. If that is not the case, try to reconnect to the robot and make sure you follow the set-up.
-
-### How to play back a  recorded animation
-
-Run the movement test node with:
-
-` rosrun close_encounters_ur5 movement_test_node.py `
-
- The movement_test_node will ask you to provide the path to the .ini file you want to play back. Make sure you provide the right path, otherwise the program will not work. 
-
-In our case:
-` /home/ubuntu/catkin_ws/src/Robot-With-Character/close_encounters_ur5/inifiles ` 
-
-The program will ask if you want to use either joint states, pose goals or a cartesian path. It will also ask how many keypoints you want to play back and which section name you want to use. Make sure to fill in the amount of keypoints you want to test. 
-
-If you want to use a cartesian path or pose goal, fill in: Pose_Goals for the section name. For joint states, use the section name: Joint_States. 
-
 
 
 
