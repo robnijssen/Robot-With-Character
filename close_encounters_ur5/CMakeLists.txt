@@ -54,15 +54,15 @@ find_package(ur5 REQUIRED)
 ## Generate messages in the 'msg' folder
 add_message_files(
   FILES
-  AnglesList.msg
+  PositionList.msg
   ExecuteGoal.msg
+  FaceCoordinates.msg
 )
 
 # Generate services in the 'srv' folder
 add_service_files(
   FILES
-  SetJointValues.srv
-  GetJointValues.srv
+  UpdateMemory.srv
   SendGoal.srv
   SetPosition.srv
   SetVisionMode.srv

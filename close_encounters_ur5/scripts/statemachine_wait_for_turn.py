@@ -52,8 +52,9 @@ class Variables:
     # amount of dice in the tray
     number_of_dice = 0
     # last known face position's joint values
-    face_joint_angles = AnglesList()
-    face_joint_angles.angles = [-2.315057341252462, -1.1454232374774378, -2.5245259443866175, 0.5526210069656372, -4.67750066915621, -1.77920324007]
+    face_position = PositionList()
+    face_position.angles = [-2.22257644335, -0.57710868517, -2.30035955111, -0.333354775106, 1.80458164215, -1.49498016039]
+    face_position.pose = [0.137672240123, 0.0319267662058, 0.512328840913, -0.578146457675, -0.346376922049, 0.421628642553, 0.606629202338]
 
 # functions used in state machine
 
@@ -62,10 +63,11 @@ class Callbacks:
         waitForTurnVariables.cmd_state = state.data
     def fb_move_executor(self, feedback):
         waitForTurnVariables.fb_move_executor = feedback.data
-    def distance_to_face(self, distance):
-        waitForTurnVariables.distance_to_face = distance.data
-    def face_angles_update(self, angles):
-        waitForTurnVariables.face_joint_angles.angles = angles.angles
+    def distance_to_face(self, coordinates):
+        waitForTurnVariables.distance_to_face = coordinates.d
+    def face_angles_update(self, position):
+        waitForTurnVariables.face_position.angles = position.angles
+        waitForTurnVariables.face_position.pose = position.pose
     def number_of_dice(self, data):
         waitForTurnVariables.number_of_dice = data.data
 
@@ -107,7 +109,7 @@ class GoToFace(State):
         # send to move queue
         request = SendGoalRequest()
         request.type, request.speed, request.acceleration, request.tolerance, request.delay = 0, waitForTurnConstants.general_max_speed, waitForTurnConstants.general_max_acceleration, waitForTurnConstants.tolerance, waitForTurnConstants.sleeptime
-        request.goal = waitForTurnVariables.face_joint_angles.angles
+        request.goal = waitForTurnVariables.face_position.angles
         waitForTurnOverwriteGoal(request)
         # tell vision to look for a face
         waitForTurnVariables.vision_request.mode = 1
@@ -115,22 +117,26 @@ class GoToFace(State):
     def mainRun(self):
         rospy.sleep(waitForTurnConstants.sleeptime)
     def next(self):
-        if waitForTurnVariables.fb_move_executor == 1:
-            return WaitForTurnMachine.goToTray
-        else:
+        if waitForTurnVariables.fb_move_executor != 1:
             return WaitForTurnMachine.goToFace
+        else:
+            return WaitForTurnMachine.goToTray
 
 class GoToTray(State):
     def transitionRun(self):
         rospy.loginfo("Wait for turn: Moving to look at the tray.")
-        #
+        # send to move queue
+        request = SendGoalRequest()
+        request.type, request.speed, request.acceleration, request.tolerance, request.delay = 0, waitForTurnConstants.general_max_speed, waitForTurnConstants.general_max_acceleration, waitForTurnConstants.tolerance, waitForTurnConstants.sleeptime
+        request.goal = waitForTurnFunctions.read_from_ini('go_to_tray_joint', '1')
+        waitForTurnOverwriteGoal(request)
     def mainRun(self):
         rospy.sleep(waitForTurnConstants.sleeptime)
     def next(self):
-        if waitForTurnVariables.fb_move_executor == 1:
-            return WaitForTurnMachine.checkTray
-        else:
+        if waitForTurnVariables.fb_move_executor != 1:
             return WaitForTurnMachine.goToTray
+        else:
+            return WaitForTurnMachine.checkTray
 
 class CheckTray(State):
     def transitionRun(self):
@@ -145,7 +151,7 @@ class CheckTray(State):
             return WaitForTurnMachine.goToFaceAsking
         else:
             # publish done with waiting for turn and player is still here
-            fb_wait_for_turn_publisher.publish(1)
+            fb_wait_for_turn_publisher.publish(2)
             rospy.sleep(waitForTurnConstants.sleeptime)
             return WaitForTurnMachine.idle
 
@@ -155,43 +161,20 @@ class GoToFaceAsking(State):
         # send to move queue
         request = SendGoalRequest()
         request.type, request.speed, request.acceleration, request.tolerance, request.delay = 0, waitForTurnConstants.general_max_speed, waitForTurnConstants.general_max_acceleration, waitForTurnConstants.tolerance, waitForTurnConstants.sleeptime
-        request.goal = waitForTurnVariables.face_joint_angles.angles
+        request.goal = waitForTurnVariables.face_position.angles
         waitForTurnOverwriteGoal(request)
         if randint(0, 1) == 1:
-            request.goal[5] += float(randint(1, 5)) / 10.0
+            request.goal[5] += float(randint(3, 10)) / 10.0
         else:
-            request.goal[5] -= float(randint(1, 5)) / 10.0
+            request.goal[5] -= float(randint(3, 10)) / 10.0
         waitForTurnAddGoal(request)
     def mainRun(self):
         rospy.sleep(waitForTurnConstants.sleeptime)
     def next(self):
-        if waitForTurnVariables.fb_move_executor == 1:
-            return WaitForTurnMachine.checkForFace
-        else:
+        if waitForTurnVariables.fb_move_executor != 1:
             return WaitForTurnMachine.goToFaceAsking
-
-class CheckForFace(State):
-    def transitionRun(self):
-        rospy.loginfo("Wait for turn: checking if the face is still there.")
-        waitForTurnVariables.person_detected = False
-        # tell vision to look for a face
-        waitForTurnVariables.vision_request.mode = 1
-        waitForTurnVisionChecks(waitForTurnVariables.vision_request)
-    def mainRun(self):
-        if waitForTurnVariables.person_detected > 0:
-            waitForTurnVariables.person_detected = True
-        rospy.sleep(waitForTurnConstants.sleeptime)
-    def next(self):
-        if waitForTurnVariables.fb_move_executor == 2:
-            if waitForTurnVariables.person_detected == True:
-                return WaitForTurnMachine.goToTray
-            else:
-                # publish player walked away
-                fb_wait_for_turn_publisher.publish(1)
-                rospy.sleep(waitForTurnConstants.sleeptime)
-                return WaitForTurnMachine.idle
         else:
-            return WaitForTurnMachine.checkForFace
+            return WaitForTurnMachine.goToTray
 
 if __name__ == '__main__':
     try:
@@ -219,8 +202,8 @@ if __name__ == '__main__':
         # init subscribers
         waitForTurnCmd_state = rospy.Subscriber("/cmd_state", Int8, waitForTurnCallbacks.state)
         waitForTurnFb_move_executor = rospy.Subscriber("/fb_move_executor", Int8, waitForTurnCallbacks.fb_move_executor)
-        waitForTurnDistance_to_face = rospy.Subscriber("/vision_face_d", Int8, waitForTurnCallbacks.distance_to_face)
-        waitForTurnFace_joint_angles = rospy.Subscriber("/face_joint_angles", AnglesList, waitForTurnCallbacks.face_angles_update)
+        waitForTurnDistance_to_face = rospy.Subscriber("/vision_face_coordinates", FaceCoordinates, waitForTurnCallbacks.distance_to_face)
+        waitForTurnFace_position = rospy.Subscriber("/face_position", PositionList, waitForTurnCallbacks.face_angles_update)
         waitForTurnNumber_of_dice = rospy.Subscriber("/vision_number_of_dice", Int8, waitForTurnCallbacks.number_of_dice)
 
         # init services
@@ -238,8 +221,7 @@ if __name__ == '__main__':
         WaitForTurnMachine.goToTray = GoToTray()
         WaitForTurnMachine.checkTray = CheckTray()
         WaitForTurnMachine.goToFaceAsking = GoToFaceAsking()
-        WaitForTurnMachine.checkForFace = CheckForFace()
-        WaitForTurnMachine().runAll(0)
+        WaitForTurnMachine().runAll()
 
     except rospy.ROSInterruptException:
         pass

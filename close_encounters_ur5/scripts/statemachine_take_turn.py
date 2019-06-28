@@ -24,6 +24,8 @@ This program will then return to idle.
 class Constants:
     # sleep between state checks
     sleeptime = 0.3
+    # time it has for checking for the cup
+    checktime = 1.0
     # time it takes to open/close the gripper
     griptime = 2
     # movement values
@@ -117,7 +119,7 @@ class CheckForCup(State):
         # tell vision to look for the cup
         takeTurnVisionChecks(3)
     def mainRun(self):
-        rospy.sleep(takeTurnConstants.sleeptime)
+        rospy.sleep(takeTurnConstants.checktime)
     def next(self):
         if takeTurnVariables.cup_in_frame == 1:
             takeTurnVisionChecks(0)
@@ -132,7 +134,7 @@ class AskForCup(State):
         # send to move queue
         takeTurnVariables.goal_req.goal, takeTurnVariables.goal_req.type = takeTurnFunctions.read_from_ini('ask_for_cup_pose', '1'), 2
         takeTurnOverwriteGoal(takeTurnVariables.goal_req)
-        for i in range(1, 8):
+        for i in range(1, 4):
             takeTurnVariables.goal_req.goal = takeTurnFunctions.read_from_ini('ask_for_cup_pose', str(i))
             takeTurnAddGoal(takeTurnVariables.goal_req)
         takeTurnVariables.goal_req.goal = []
@@ -141,7 +143,7 @@ class AskForCup(State):
         rospy.sleep(takeTurnConstants.sleeptime)
     def next(self):
         if takeTurnVariables.fb_move_executor == 1:
-            return TakeTurnMachine.checkForCup
+            return TakeTurnMachine.goToCupCheckPosition
         else:
             return TakeTurnMachine.askForCup
 
@@ -173,7 +175,7 @@ class Grab(State):
         rospy.sleep(takeTurnConstants.griptime)
     def next(self):
         # check pressure on the gripper
-        if gripper_input.gCU < 10:
+        if gripper_input.gOBJ != 2:
             # tell gripper to open
             takeTurnGripperCommand.rPR = 0
             takeTurnGripperGripperPublisher.publish(takeTurnGripperCommand)
@@ -187,7 +189,7 @@ class Roll(State):
         # send to move queue
         takeTurnVariables.goal_req.goal, takeTurnVariables.goal_req.type = takeTurnFunctions.read_from_ini('roll_pose', '3'), 2
         takeTurnOverwriteGoal(takeTurnVariables.goal_req)
-        for i in range(4, 12):
+        for i in range(4, 10):
             takeTurnVariables.goal_req.goal = takeTurnFunctions.read_from_ini('roll_pose', str(i))
             takeTurnAddGoal(takeTurnVariables.goal_req)
         takeTurnVariables.goal_req.goal = []
@@ -274,7 +276,7 @@ if __name__ == '__main__':
         TakeTurnMachine.grab = Grab()
         TakeTurnMachine.roll = Roll()
         TakeTurnMachine.release = Release()
-        TakeTurnMachine().runAll(0)
+        TakeTurnMachine().runAll()
 
     except rospy.ROSInterruptException:
         pass

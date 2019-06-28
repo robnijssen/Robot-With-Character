@@ -33,13 +33,13 @@ class Functions:
         executor_moving.publish(1)
         fb_move_executor.publish(order_number - 1)
     def execute_joint_movement(self, order):
-        rospy.loginfo("Move_executor: Executing joint movement.")
+        rospy.loginfo("\t\tMove_executor: Executing joint movement.")
         # compute a plan
         execute_group.set_joint_value_target(order.goal)
         # go to the planned position
         execute_group.go(wait=True)
     def execute_pose_movement(self, order):
-        rospy.loginfo("Move_executor: Executing pose movement.")
+        rospy.loginfo("\t\tMove_executor: Executing pose movement.")
         # put the values in the goal
         pose_goal = geometry_msgs.msg.Pose()
         pose_goal.position.x, pose_goal.position.y, pose_goal.position.z = order.goal[0], order.goal[1], order.goal[2]
@@ -62,10 +62,10 @@ class Functions:
             waypoint.orientation.x, waypoint.orientation.y = order.goal[3], order.goal[4]
             waypoint.orientation.z, waypoint.orientation.w = order.goal[5], order.goal[6]
         except:
-            rospy.logerr("Move_executor: Tried to add the wrong type in a cartesian path (probably a joint goal was tried instead of a pose goal).")
+            rospy.logerr("\t\tMove_executor: Tried to add the wrong type in a cartesian path (probably a joint goal was tried instead of a pose goal).")
         executorVariables.waypoints.append(waypoint)
     def run_carthesian_path(self, order_number):
-        rospy.loginfo("Move_executor: Executing cartesian path.")
+        rospy.loginfo("\t\tMove_executor: Executing cartesian path.")
         #   start the path in the waypoints
         # plan path with the waypoints, interpolated at every 10 cm, and the jump threshold disabled
         cartesian_plan, fraction = execute_group.compute_cartesian_path(executorVariables.waypoints, 0.01, 0.0)
@@ -80,29 +80,29 @@ class Functions:
             if (speed > 0.01) and (speed < 1):
                 execute_group.set_max_velocity_scaling_factor(speed)
                 executorVariables.current_speed = speed
-                rospy.loginfo("Move_executor: Speed changed to " + str(speed))
+                rospy.loginfo("\t\tMove_executor: Speed changed to " + str(speed))
             else:
-                rospy.logwarn("Move_executor: Speed couldn't be changed to " + str(speed))
+                rospy.logwarn("\t\tMove_executor: Speed couldn't be changed to " + str(speed))
         if abs(executorVariables.current_acceleration - acceleration) > 0.001:
             if (acceleration > 0.01) and (acceleration < 1):
                 execute_group.set_max_acceleration_scaling_factor(acceleration)
                 executorVariables.current_acceleration = acceleration
-                rospy.loginfo("Move_executor: Acceleration changed to " + str(acceleration))
+                rospy.loginfo("\t\tMove_executor: Acceleration changed to " + str(acceleration))
             else:
-                rospy.logwarn("Move_executor: Acceleration couldn't be changed to " + str(acceleration))
+                rospy.logwarn("\t\tMove_executor: Acceleration couldn't be changed to " + str(acceleration))
     def check_tolerances(self, tolerance):
         # change the tolerance in two places if it is different
         if abs(executorVariables.current_tolerance - tolerance) > 0.001:
             execute_group.set_goal_orientation_tolerance(tolerance)
             execute_group.set_goal_position_tolerance(tolerance)
             executorVariables.current_tolerance = tolerance
-            rospy.loginfo("Move_executor: Tolerance changed to " + str(tolerance))
+            rospy.loginfo("\t\tMove_executor: Tolerance changed to " + str(tolerance))
     def stop(self, order_number):
         # make sure to stop the residual movements
         execute_group.stop()
         execute_group.clear_pose_targets()
         # publish the end of the move
-        rospy.loginfo("Move_executor: Goal number " + str(order_number) + " reached.")
+        rospy.loginfo("\t\tMove_executor: Goal number " + str(order_number) + " reached.")
         executor_moving.publish(0)
         fb_move_executor.publish(order_number)
 
@@ -126,7 +126,7 @@ class Callbacks:
         elif order.type == 2:
             executorFunctions.add_to_cartesian_path(order)
         else:
-            rospy.logfatal("Move_executor: invalid order type.")
+            rospy.logfatal("\t\tMove_executor: invalid order type.")
 
 if __name__ == '__main__':
     try:
@@ -160,7 +160,7 @@ if __name__ == '__main__':
         # init subscribers to receive commands
         rospy.Subscriber('/execute_movement', ExecuteGoal, executorCallbacks.execute_movement, queue_size=1)
 
-        rospy.loginfo("Move_executor: Ready to take orders.")
+        rospy.loginfo("\t\tMove_executor: Ready to take orders.")
 
         # sleep till called or shutdown
         rospy.spin()

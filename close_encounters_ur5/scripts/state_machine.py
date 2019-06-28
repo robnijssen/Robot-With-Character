@@ -10,7 +10,7 @@ Blueprints for the state machines and states used in the node's python files.
 class StateMachineBlueprint:
     def __init__(self, initialState):
         self.currentState = initialState
-    def runAll(self, inputs):
+    def runAll(self):
         while not rospy.is_shutdown():
             # overwrite nextState
             self.nextState = self.currentState.next()

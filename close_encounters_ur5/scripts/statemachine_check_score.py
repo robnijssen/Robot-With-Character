@@ -22,13 +22,15 @@ This program will move the bot to a score checking position and return the score
 class Constants:
     # sleep between state checks
     sleeptime = 0.1
+    # time it needs for checking the score
+    checktime = 1.0
     # for debugging, play alone delay time
     debugtime = 5
     # max speed/acceleration
     general_max_speed = 1.0
     general_max_acceleration = 1.0
     # tolerance in joints
-    tolerance = 0.0001
+    tolerance = 0.00001
 
 class Variables:
     # a variable to keep track of what state the control is in
@@ -87,10 +89,13 @@ class GoToPosition(State):
         request = SendGoalRequest()
         request.goal, request.type, request.speed, request.acceleration, request.tolerance, request.delay = checkScoreFunctions.read_from_ini('check_score_pose', '1'), 2, checkScoreConstants.general_max_speed, checkScoreConstants.general_max_acceleration, checkScoreConstants.tolerance, 0.01
         checkScoreOverwriteGoal(request)
-        for i in range(1, 6):
+        for i in range(1, 5): # note: position 4 is a valid looking position
             request.goal = checkScoreFunctions.read_from_ini('check_score_pose', str(i))
             checkScoreAddGoal(request)
         request.goal = []
+        checkScoreAddGoal(request)
+        # add the check score position in joint values
+        request.goal, request.type = checkScoreFunctions.read_from_ini('check_score_end_position_joint', '1'), 0
         checkScoreAddGoal(request)
         # tell the vision node start checking for the score
         checkScoreVariables.vision_request.mode = 2
@@ -99,16 +104,18 @@ class GoToPosition(State):
     def mainRun(self):
         rospy.sleep(checkScoreConstants.sleeptime)
     def next(self):
-        if(checkScoreVariables.fb_move_executor != 1):
-            return CheckScoreMachine.idle
+        if(checkScoreVariables.fb_move_executor != 2):
+            return CheckScoreMachine.goToPosition
         else:
-            # publish the score as feedback
-            fb_check_score_publisher.publish(checkScoreVariables.score)
+            # give the vision time to do the checks
+            rospy.sleep(checkScoreConstants.checktime)
             # tell the vision node to stop checking for the score
             checkScoreVariables.vision_request.mode = 0
             checkScoreVisionChecks(checkScoreVariables.vision_request)
-            rospy.sleep(checkScoreConstants.sleeptime)
-            return CheckScoreMachine.goToPosition
+            # publish the score as feedback
+            fb_check_score_publisher.publish(checkScoreVariables.score)
+            rospy.sleep(checkScoreConstants.sleeptime * 2)
+            return CheckScoreMachine.idle
 
 if __name__ == '__main__':
     try:
@@ -150,7 +157,7 @@ if __name__ == '__main__':
         #<statemachine_name>.<state_without_capital_letter> = <state_class_name>()
         CheckScoreMachine.idle = Idle()
         CheckScoreMachine.goToPosition = GoToPosition()
-        CheckScoreMachine().runAll(0)
+        CheckScoreMachine().runAll()
 
     except rospy.ROSInterruptException:
         pass

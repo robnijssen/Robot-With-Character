@@ -40,7 +40,7 @@ class Queue:
             del self._orders[0]
             return (item)
         except IndexError:
-            rospy.logwarn("Move_queue: order was overwritten before sending an order was completed.")
+            rospy.logwarn("\tMove_queue: order was overwritten before sending an order was completed.")
     def append(self, val):
         # prepare the new order to add to the order list
         new_order = ExecuteGoal()
@@ -78,13 +78,12 @@ class Variables:
     # standard responses for the callbacks ready to go
     goal_response = SendGoalResponse()
     goal_response.response = True
-    position_response = SetPositionResponse()
-    position_response.response = True
     # variables to keep track of the change
     current_face_angles = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
-    current_cup_angles = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
     # time to sleep after publishing
     sleeptime = 0.08
+    # center of the screen and tolerance for doing corrections on set_face_position
+    cen_x, cen_y, cen_t = 320, 240, 30
     # a variable to keep track of if the bot is moving at the moment
     moving = 0
     
@@ -95,16 +94,19 @@ class Functions:
         queue_group.clear_pose_targets()
     def start_cartesian_path(self, go_index):
         # publish the waypoints and start command in sequence
-        for i in range(0, go_index + 1):
-            execute_movement.publish(queue.take())
-            rospy.sleep(queueVariables.sleeptime)
+        try:
+            for i in range(0, go_index + 1):
+                execute_movement.publish(queue.take())
+                rospy.sleep(queueVariables.sleeptime)
+        except:
+            rospy.logwarn("\tMove_queue: ignoring the rest of start_cartesian_path.")
     def start_single_goal(self):
         # publish a single order
-        execute_movement.publish(queue.take())
-        rospy.sleep(queueVariables.sleeptime)
-    def determine_angles(self, x, y):
-        # to do: add corrections using the x and y supplied by the vision node
-        return queue_group.get_current_joint_values()
+        try:
+            execute_movement.publish(queue.take())
+            rospy.sleep(queueVariables.sleeptime)
+        except:
+            rospy.logwarn("\tMove_queue: ignoring the rest of start_single_goal.")
 
 class Callbacks:
     def overwrite_orders(self, new_order):
@@ -116,27 +118,27 @@ class Callbacks:
         queueFunctions.stop()
         # start the new order if it's a joint/pose goal
         if queue.next_type() == 0 or queue.next_type() == 1:
-            rospy.loginfo("Move_queue: Starting a joint or pose goal from overwrite orders.")
+            rospy.loginfo("\tMove_queue: Starting a joint or pose goal from overwrite orders.")
             queueFunctions.start_single_goal()
         else:
-            rospy.loginfo("Move_queue: Waiting for a go command for this cartesian path in overwrite orders.")
+            rospy.loginfo("\tMove_queue: Waiting for a go command for this cartesian path in overwrite orders.")
         return True
     def add_order(self, new_order):
         # append an order to the queue
         queue.append(new_order)
         # start if not moving
-        if not queueVariables.moving:
+        if queueVariables.moving != 1:
             # start the new order if it's a joint/pose goal
             if queue.next_type() == 0 or queue.next_type() == 1:
-                rospy.loginfo("Move_queue: Starting a joint or pose goal from add_order.")
+                rospy.loginfo("\tMove_queue: Starting a joint or pose goal from add_order.")
                 queueFunctions.start_single_goal()
                 return True
             # start a cartesian path if a go command was added just now
             if list(new_order.goal) == []:
-                rospy.loginfo("Move_queue: Starting a cartesian path from add_order.")
+                rospy.loginfo("\tMove_queue: Starting a cartesian path from add_order.")
                 queueFunctions.start_cartesian_path(queue.check_for_go_command())
             else:
-                rospy.loginfo("Move_queue: Cartesian waypoint added. Still waiting for a go command.")
+                rospy.loginfo("\tMove_queue: Cartesian waypoint added. Still waiting for a go command.")
         return True
     def order_completed(self, order_number):
         # check if there's a new order available
@@ -144,36 +146,49 @@ class Callbacks:
             if queue.len() != 0:
                 # start the new order if it's a joint/pose goal
                 if queue.next_type() == 0 or queue.next_type() == 1:
-                    rospy.loginfo("Move_queue: Starting a joint or pose goal from order_completed.")
+                    rospy.loginfo("\tMove_queue: Starting a joint or pose goal from order_completed.")
                     queueFunctions.start_single_goal()
                     return
                 # start a cartesian path if a go command is in the queue
                 go_index = queue.check_for_go_command()
                 if go_index != 0:
-                    rospy.loginfo("Move_queue: Starting a cartesian path from order_completed.")
+                    rospy.loginfo("\tMove_queue: Starting a cartesian path from order_completed.")
                     queueFunctions.start_cartesian_path(go_index)
                 else:
-                    rospy.loginfo("Move_queue: Waiting for a cartesian go command to be added in order_completed.")
+                    rospy.loginfo("\tMove_queue: Waiting for a cartesian go command to be added in order_completed.")
             else:
-                rospy.loginfo("Move_queue: Waiting for a new order to be added.")
+                rospy.loginfo("\tMove_queue: Waiting for a new order to be added.")
     def set_face_position(self, coordinates):
-        # determine angles from position in frame and current angles
-        determined_joint_angles = SetJointValuesRequest()
-        determined_joint_angles.angles = queueFunctions.determine_angles(coordinates.x, coordinates.y)
-        # pass determined angles on to the memory, but only if the change is big enough
-        if abs(determined_joint_angles.angles[0] - queueVariables.current_face_angles[0]) + abs(determined_joint_angles.angles[1] - queueVariables.current_face_angles[1]) + abs(determined_joint_angles.angles[2] - queueVariables.current_face_angles[2]) + abs(determined_joint_angles.angles[3] - queueVariables.current_face_angles[3]) + abs(determined_joint_angles.angles[4] - queueVariables.current_face_angles[4]) > 0.01:
-            setFaceAngles(determined_joint_angles)
-            queueVariables.current_cup_angles = determined_joint_angles.angles
-        return queueVariables.position_response
-    def set_cup_position(self, coordinates):
-        # determine angles from position in frame and current angles
-        determined_joint_angles = SetJointValuesRequest()
-        determined_joint_angles.angles = queueFunctions.determine_angles(coordinates.x, coordinates.y)
-        # pass determined angles on to the memory, but only if the change is big enough
-        if abs(determined_joint_angles.angles[0] - queueVariables.current_cup_angles[0]) + abs(determined_joint_angles.angles[1] - queueVariables.current_cup_angles[1]) + abs(determined_joint_angles.angles[2] - queueVariables.current_cup_angles[2]) + abs(determined_joint_angles.angles[3] - queueVariables.current_cup_angles[3]) + abs(determined_joint_angles.angles[4] - queueVariables.current_cup_angles[4]) > 0.01:
-            setCupAngles(determined_joint_angles)
-            queueVariables.current_cup_angles = determined_joint_angles.angles
-        return queueVariables.position_response
+        if coordinates.x != -1:
+            # determine angles from position in frame and current angles
+            determined_position = UpdateMemoryRequest()
+            determined_position.angles = queue_group.get_current_joint_values()
+            current_pose = queue_group.get_current_pose()
+            determined_position.pose.append(current_pose.pose.position.x)
+            determined_position.pose.append(current_pose.pose.position.y)
+            determined_position.pose.append(current_pose.pose.position.z)
+            determined_position.pose.append(current_pose.pose.orientation.x)
+            determined_position.pose.append(current_pose.pose.orientation.y)
+            determined_position.pose.append(current_pose.pose.orientation.z)
+            determined_position.pose.append(current_pose.pose.orientation.w)
+            # do a correction on the pitch and yaw of the pose to close in on the face
+            #if coordinates.e > queueVariables.cen_t:
+            #    if coordinates.x < queueVariables.cen_x - queueVariables.cen_t:
+            #        # turn to the left
+            #        determined_position.pose[5] -= 0.1
+            #    elif coordinates.x > queueVariables.cen_x + queueVariables.cen_t:
+            #        # turn to the right
+            #        determined_position.pose[5] += 0.1
+            #    if coordinates.y < queueVariables.cen_y - queueVariables.cen_t:
+            #        # turn pitch up
+            #        determined_position.pose[4] += 0.1
+            #    elif coordinates.y > queueVariables.cen_y + queueVariables.cen_t:
+            #        # turn pitch down
+            #        determined_position.pose[4] -= 0.1
+            # pass determined angles on to the memory, but only if the change is big enough
+            if abs(determined_position.angles[0] - queueVariables.current_face_angles[0]) + abs(determined_position.angles[1] - queueVariables.current_face_angles[1]) + abs(determined_position.angles[2] - queueVariables.current_face_angles[2]) + abs(determined_position.angles[3] - queueVariables.current_face_angles[3]) + abs(determined_position.angles[4] - queueVariables.current_face_angles[4]) > 0.01:
+                setFaceAngles(determined_position)
+                queueVariables.current_face_angles = determined_position.angles
     def executor_moving(self, data):
         queueVariables.moving = data.data
 
@@ -196,29 +211,28 @@ if __name__ == '__main__':
         # init publisher to command the move executor
         execute_movement = rospy.Publisher('/execute_movement', ExecuteGoal, queue_size=1)
 
-        # init subscriber to check the feedback from the move_executor
+        # init subscribers to check the feedback from the move_executor
         rospy.Subscriber('/fb_move_executor', Int8, queueCallbacks.order_completed)
         rospy.Subscriber('/executor_moving', Int8, queueCallbacks.executor_moving)
+
+        # init subscribers for setting the face position
+        rospy.Subscriber('/vision_face_coordinates', FaceCoordinates, queueCallbacks.set_face_position)
 
         # init services
         rospy.Service('/overwrite_goal', SendGoal, queueCallbacks.overwrite_orders)
         rospy.Service('/add_goal', SendGoal, queueCallbacks.add_order)
-        rospy.Service('/set_face_position', SetPosition, queueCallbacks.set_face_position)
-        rospy.Service('/set_cup_position', SetPosition, queueCallbacks.set_cup_position)
 
         # wait for other node's services
-        rospy.wait_for_service('/set_face_joint_angles')
-        rospy.wait_for_service('/set_cup_joint_angles')
-        setFaceAngles = rospy.ServiceProxy('/set_face_joint_angles', SetJointValues)
-        setCupAngles = rospy.ServiceProxy('/set_cup_joint_angles', SetJointValues)
+        rospy.wait_for_service('/set_face_position')
+        setFaceAngles = rospy.ServiceProxy('/set_face_position', UpdateMemory)
 
-        rospy.loginfo("Move_queue: Ready to take orders.")
+        rospy.loginfo("\tMove_queue: Ready to take orders.")
 
         # sleep till called or shutdown
         rospy.spin()
 
         # stop the movements and clear goals (automatically stops the move_executor this way)
-        rospy.loginfo("Move_queue: Stopping movements.")
+        rospy.loginfo("\tMove_queue: Stopping movements.")
         queue_group.stop()
         queue_group.clear_pose_targets()
 

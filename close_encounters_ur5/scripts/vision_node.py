@@ -5,8 +5,8 @@ from std_msgs.msg import Int8, Int16
 import math
 import numpy as np
 import cv2
-from close_encounters_ur5.srv import SetVisionMode, SetVisionModeResponse
-from close_encounters_ur5.srv import SetPosition, SetPositionRequest
+from close_encounters_ur5.srv import *
+from close_encounters_ur5.msg import *
 
 class Constants:
     # the program checks no more than 1/sleep_time per second
@@ -27,12 +27,6 @@ class Variables:
     dice_x_list = []
     dice_y_list = []
 
-class Publishers:
-    def faces(_, face_x, face_y, face_d):
-        face_x_publisher.publish(face_x)
-        face_y_publisher.publish(face_y)
-        face_d_publisher.publish(face_d)
-
 class Callbacks:
     def set_vision_checks(self, mode):
         if mode.mode == 0:
@@ -52,7 +46,7 @@ class Callbacks:
             diceMain.mode = False
             cupRecognition.mode = True
         else:
-            rospy.logwarn("Vision: Tried to set unknown mode.")
+            rospy.logwarn("\tVision: Tried to set unknown mode.")
         return visionConstants.result
 
 class FaceRecognition:
@@ -65,7 +59,7 @@ class FaceRecognition:
         self.cen_x = visionConstants.res_x / 2
         self.cen_y = visionConstants.res_y / 2
         # prepare a request for set_position
-        self.coordinates = SetPositionRequest()
+        self.coordinates = FaceCoordinates()
     def run(self, frame):
         if self.mode == True:
             # only do face recognition when mode is set to face recognition
@@ -76,6 +70,9 @@ class FaceRecognition:
             y_list = []
             d_list = []
             e_list = []
+            # set these values to the first components of the lists
+            chosen_face = 0
+            j = 0
             for (x,y,w,h) in faces:
                 # draw a rectangle around the face
                 cv2.rectangle(frame,(x,y),(x+w,y+h),(255,255,0),5)
@@ -96,27 +93,31 @@ class FaceRecognition:
                 y_list.append(y_face_center)
                 d_list.append(d)
                 e_list.append(e)
+                # check if the chosen face should be updated
+                if d_list[chosen_face] > d_list[j]:
+                    # face is closer than the other ones in the list
+                    chosen_face = j
+                elif d_list[chosen_face] == d_list[j] and e_list[j] < e_list[chosen_face]:
+                    # the face is as close and another face in the list, but it is closer to the center of the frame
+                    chosen_face = j
+                j += 1
             # check if there's at least one face in the list
             if len(d_list) > 0:
-                # set value to the first component of the lists
-                chosen_face = 0
-                # decide which face to track
-                for j in range(0, len(d_list)):
-                    if d_list[chosen_face] > d_list[j]:
-                        if e_list[j] < e_list[chosen_face]:
-                            chosen_face = j
                 # draw cross over the the chosen face
                 cv2.line(frame,(x_list[chosen_face], 0),(x_list[chosen_face], visionConstants.res_y),(0,0,255),5)
                 cv2.line(frame,(0, y_list[chosen_face]),(visionConstants.res_x, y_list[chosen_face]),(0,0,255),5)
-                # publish face values
-                visionPublishers.faces(x_list[chosen_face], y_list[chosen_face], d_list[chosen_face])
-                # send x and y to the move queue for processing
+                # prepare coordinates for publishing
                 self.coordinates.x = x_list[chosen_face]
                 self.coordinates.y = y_list[chosen_face]
-                visionSetFacePosition(self.coordinates)
+                self.coordinates.d = d_list[chosen_face]
+                self.coordinates.e = e_list[chosen_face]
+                rospy.loginfo("\tVision: Face found at coordinates: " + str(x_list[chosen_face]) + " " + str(y_list[chosen_face]) + " " + str(d_list[chosen_face])+ " " + str(e_list[chosen_face]))
             else:
-                # publish that there's no face at the moment
-                visionPublishers.faces(-1, -1, -1)
+                # no face found --> don't draw a cross on the frame
+                # prepare coordinates for publishing
+                self.coordinates.x, self.coordinates.y, self.coordinates.d, self.coordinates.e = -1, -1, -1, -1
+            # publish coordinates for the move queue to check the position and send that to the position memory
+            face_coordinates_publisher.publish(self.coordinates)
 
 class DiceMain():
     def __init__(self):
@@ -222,6 +223,7 @@ class PipCount():
     kernel = (5, 5)
     kernelOpen = np.ones((5,5))
     kernelClose = np.ones((20,20))
+    previous_amount = 0
     def AmountOfDices(self, frame):
         # Emty list to keep track of amount of dices.
         self.contours_list_dice = []
@@ -257,6 +259,9 @@ class PipCount():
         # Return the amount of dices to the main function. 
         result = (len(self.contours_list_dice)/2)
         dice_amount_publisher.publish(result)
+        if self.previous_amount != result:
+            self.previous_amount = result
+            rospy.loginfo("\tVision: Amount of dice found: " + str(result))
         return result
     def countBlobs(self, frame):
         # Create parameters for blobdetection
@@ -289,7 +294,7 @@ class PipCount():
             self.display.append(self.readings[-1])
         if self.display[-1] != self.display[-2] and self.display[-1] != 0:
             # publish score
-            rospy.loginfo("Vision: amount of pips: " + str(self.display[-1]))
+            rospy.loginfo("\tVision: amount of pips: " + str(self.display[-1]))
             dice_score_publisher.publish(self.display[-1])
         text = cv2.putText(img_with_keypoints, str(self.display[-1]), (50, 50), cv2.FONT_HERSHEY_SIMPLEX, 1.0, (0, 0, 0), 2, cv2.LINE_AA)
         return img_with_keypoints
@@ -347,6 +352,8 @@ class Cup():
                     cv2.rectangle(frame,(self.left+x,self.top+y),(self.left+x+w,self.top+y+h),(0,255,0),5)
                     cup_detected = 1
                     break
+        if cup_detected == 1:
+            rospy.loginfo("\tVision: Cup detected.")
         # publish the result
         cup_detected_publisher.publish(cup_detected)
         rospy.sleep(visionConstants.sleep_time)
@@ -355,20 +362,17 @@ if __name__ == '__main__':
     try:
         # start a new node
         rospy.init_node('vision_node', anonymous=True)
-        rospy.loginfo("Vision: Node starting.")
+        rospy.loginfo("\tVision: Node starting.")
         
         visionConstants = Constants()
         visionVariables = Variables()
         visionCallbacks = Callbacks()
 
         # init publishers for the function nodes that need it, like the trackers
-        face_x_publisher = rospy.Publisher('/vision_face_x', Int16, queue_size=1)
-        face_y_publisher = rospy.Publisher('/vision_face_y', Int16, queue_size=1)
-        face_d_publisher = rospy.Publisher('/vision_face_d', Int8, queue_size=1)
+        face_coordinates_publisher = rospy.Publisher('/vision_face_coordinates', FaceCoordinates, queue_size=1)
         dice_score_publisher = rospy.Publisher('/vision_score', Int8, queue_size=1)
         dice_amount_publisher = rospy.Publisher('/vision_amount', Int8, queue_size=1)
-        cup_detected_publisher = rospy.Publisher('/cup_detected', Int8, queue_size=1)
-        visionPublishers = Publishers()
+        cup_detected_publisher = rospy.Publisher('/vision_cup_detected', Int8, queue_size=1)
 
         # init video feed
         cap = cv2.VideoCapture(-1)
@@ -381,9 +385,9 @@ if __name__ == '__main__':
             visionConstants.res_x, visionConstants.res_y = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)), int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
             visionConstants.cen_x = int(visionConstants.res_x / 2)
             visionConstants.cen_y = int(visionConstants.res_y / 2)
-            rospy.loginfo("Vision: Camera resolution: " + str(visionConstants.res_x) + ", " + str(visionConstants.res_y) + ".")
+            rospy.loginfo("\tVision: Camera resolution: " + str(visionConstants.res_x) + ", " + str(visionConstants.res_y) + ".")
         else:
-            rospy.logfatal("Vision: No camera found. Please make sure it is connected and try again.")
+            rospy.logfatal("\tVision: No camera found. Please make sure it is connected and try again.")
 
         # init face recognition
         faceRecognition = FaceRecognition()
@@ -397,14 +401,8 @@ if __name__ == '__main__':
         # init cup recognition
         cupRecognition = Cup()
 
-        # init services
+        # init mode setting service
         rospy.Service('/vision_checks', SetVisionMode, visionCallbacks.set_vision_checks)
-
-        # wait for services to start
-        rospy.wait_for_service('/set_face_position')
-        rospy.wait_for_service('/set_cup_position')
-        visionSetFacePosition = rospy.ServiceProxy('/set_face_position', SetPosition)
-        visionSetCupPosition = rospy.ServiceProxy('/set_cup_position', SetPosition)
 
         if cap.isOpened():
             # run all

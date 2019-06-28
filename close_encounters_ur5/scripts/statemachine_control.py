@@ -29,6 +29,7 @@ class Variables:
     setUp_feedback = 0
     takeTurn_feedback = 0
     waitForTurn_feedback = 0
+    checkScore_feedback = 0
     react_feedback = 0
     # a variable to keep track of the turns
     turn_number = 0
@@ -53,6 +54,8 @@ class Callbacks:
         controlVariables.takeTurn_feedback = feedback.data
     def waitForTurn(self, feedback):
         controlVariables.waitForTurn_feedback = feedback.data
+    def checkScore(self, feedback):
+        controlVariables.checkScore_feedback = feedback.data
     def react(self, feedback):
         controlVariables.react_feedback = feedback.data
     def vision_score(self, score):
@@ -181,16 +184,16 @@ class CheckScore(State):
         cmd_state_publisher.publish(5)
         rospy.sleep(controlConstants.sleeptime)
     def next(self):
-        if(controlVariables.waitForTurn_feedback == 0):
+        if(controlVariables.checkScore_feedback == 0):
             # not ready determining the score
             return MainControlMachine.checkScore
-        elif(controlVariables.waitForTurn_feedback > 1):
+        elif(controlVariables.checkScore_feedback > 1):
             # determined the score
             if controlVariables.turn_number % 2 != 0:
-                controlVariables.player_score = controlVariables.current_score
+                controlVariables.player_score = controlVariables.checkScore_feedback
                 return MainControlMachine.setUp
             else:
-                controlVariables.bot_score = controlVariables.current_score
+                controlVariables.bot_score = controlVariables.checkScore_feedback
                 if controlVariables.bot_total_score > 2:
                     controlVariables.final_score = 0
                     return MainControlMachine.react
@@ -266,6 +269,7 @@ if __name__ == '__main__':
         fb_set_up = rospy.Subscriber("/fb_set_up", Int8, controlCallbacks.setUp)
         fb_take_turn = rospy.Subscriber("/fb_take_turn", Int8, controlCallbacks.takeTurn)
         fb_wait_for_turn = rospy.Subscriber("/fb_wait_for_turn", Int8, controlCallbacks.waitForTurn)
+        fb_wait_for_turn = rospy.Subscriber("/fb_check_score", Int8, controlCallbacks.checkScore)
         fb_react = rospy.Subscriber("/fb_react", Int8, controlCallbacks.react)
         
         # instantiate state machine
@@ -277,7 +281,7 @@ if __name__ == '__main__':
         MainControlMachine.waitForTurn = WaitForTurn()
         MainControlMachine.checkScore = CheckScore()
         MainControlMachine.react = React()
-        MainControlMachine().runAll(0)
+        MainControlMachine().runAll()
 
     except rospy.ROSInterruptException:
         pass

@@ -47,3 +47,5 @@ To find new joint values to use, launch:
 roslaunch close_encounters_ur5 arm_drivers.launch
 Then move the arm and run:
 rosrun close_encounters_ur5 pose_joint_printer.py
+
+# rosrun robotiq_2f_gripper_control Robotiq2FGripperRtuNode.py /dev/ttyUSB0

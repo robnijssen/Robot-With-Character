@@ -2,35 +2,33 @@
 import sys
 import rospy
 # import service types
-from close_encounters_ur5.srv import SetJointValues, SetJointValuesResponse, GetJointValues, GetJointValuesRequest, GetJointValuesResponse
-from close_encounters_ur5.msg import AnglesList
+from close_encounters_ur5.srv import *
+from close_encounters_ur5.msg import *
+
 """
 This server will just wait and respond to requests from the other nodes.
 """
 
 class Constants:
     # default position's joint angles
-    default_angles = AnglesList()
-    default_angles.angles = [-2.3151, -1.1454, -2.5245, 0.5526, 1.4817, -1.5052]
+    default_position = PositionList()
+    default_position.angles = [-2.22257644335, -0.57710868517, -2.30035955111, -0.333354775106, 1.80458164215, -1.49498016039]
+    default_position.pose = [0.137672240123, 0.0319267662058, 0.512328840913, -0.578146457675, -0.346376922049, 0.421628642553, 0.606629202338]
     # response ready for SetJointValues services
-    res = SetJointValuesResponse()
-    res.feedback = True
+    res = UpdateMemoryResponse()
+    res.response = True
     
 class Variables:
-    # face and cup positions (default)
-    face_angles = AnglesList()
-    face_angles.angles = list(Constants().default_angles.angles)
-    cup_angles = AnglesList()
-    cup_angles.angles = list(Constants().default_angles.angles)
+    # face position (default)
+    face_position = PositionList()
+    face_position.angles = list(Constants().default_position.angles)
+    face_position.pose = list(Constants().default_position.pose)
 
 class Callbacks:
-    def set_face_position(self, angles):
-        memoryVariables.face_angles.angles = angles.angles
-        face_joint_angles_publisher.publish(memoryVariables.face_angles)
-        return memoryConstants.res
-    def set_cup_position(self, angles):
-        memoryVariables.cup_angles.angles = angles.angles
-        cup_joint_angles_publisher.publish(memoryVariables.cup_angles)
+    def set_face_position(self, position):
+        memoryVariables.face_position.angles = position.angles
+        memoryVariables.face_position.pose = position.pose
+        face_position_publisher.publish(memoryVariables.face_position)
         return memoryConstants.res
 
 if __name__ == '__main__':
@@ -44,18 +42,15 @@ if __name__ == '__main__':
         memoryCallbacks = Callbacks()
 
         # init services
-        rospy.Service('/set_face_joint_angles', SetJointValues, memoryCallbacks.set_face_position)
-        rospy.Service('/set_cup_joint_angles', SetJointValues, memoryCallbacks.set_cup_position)
+        rospy.Service('/set_face_position', UpdateMemory, memoryCallbacks.set_face_position)
 
         # init publishers
-        default_joint_angles_publisher = rospy.Publisher('/default_joint_angles', AnglesList, queue_size=1)
-        face_joint_angles_publisher = rospy.Publisher('/face_joint_angles', AnglesList, queue_size=1)
-        cup_joint_angles_publisher = rospy.Publisher('/cup_joint_angles', AnglesList, queue_size=1)
+        default_position_publisher = rospy.Publisher('/default_position', PositionList, queue_size=1)
+        face_position_publisher = rospy.Publisher('/face_position', PositionList, queue_size=1)
         
         # publish the initial values
-        default_joint_angles_publisher.publish(memoryConstants.default_angles)
-        face_joint_angles_publisher.publish(memoryConstants.default_angles)
-        cup_joint_angles_publisher.publish(memoryConstants.default_angles)
+        default_position_publisher.publish(memoryConstants.default_position)
+        face_position_publisher.publish(memoryConstants.default_position)
 
         # sleep till shutdown (wake up to answer, then go back to sleep)
         rospy.spin()

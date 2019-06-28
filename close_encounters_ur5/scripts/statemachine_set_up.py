@@ -22,6 +22,8 @@ The bot will try to set up the board by putting the dice in the cup.
 class Constants:
     # sleep between state checks
     sleeptime = 0.3
+    # time to check the tray
+    checktime = 1.0
     # time for the gripper to grab/release
     grabtime = 2
     # movement values
@@ -65,8 +67,8 @@ class Callbacks:
         setUpVariables.cmd_state = state.data
     def fb_move_executor(self, feedback):
         setUpVariables.fb_move_executor = feedback.data
-    def distance_to_face(self, distance):
-        setUpVariables.distance_to_face = distance.data
+    def distance_to_face(self, coordinates):
+        setUpVariables.distance_to_face = coordinates.d
     def face_angles_update(self, angles):
         setUpVariables.face_joint_angles.angles = angles.angles
     def number_of_dice(self, data):
@@ -133,7 +135,7 @@ class CheckForDice(State):
         setUpVariables.vision_request.mode = 2
         setUpVisionChecks(setUpVariables.vision_request)
     def mainRun(self):
-        rospy.sleep(setUpConstants.sleeptime)
+        rospy.sleep(setUpConstants.checktime)
     def next(self):
         if setUpVariables.dice_in_tray > 0:
             return SetUpMachine.askForDiceInCup
@@ -159,7 +161,7 @@ class AskForDiceInCup(State):
         if setUpVariables.fb_move_executor != 1:
             return SetUpMachine.askForDiceInCup
         else:
-            return SetUpMachine.checkForDice
+            return SetUpMachine.goToDiceCheckingPosition
 
 """
 class PickADie(State):
@@ -306,7 +308,7 @@ if __name__ == '__main__':
         SetUpMachine.placeADie = PlaceADie()
         SetUpMachine.releaseADie = ReleaseADie()
         """
-        SetUpMachine().runAll(0)
+        SetUpMachine().runAll()
 
     except rospy.ROSInterruptException:
         pass

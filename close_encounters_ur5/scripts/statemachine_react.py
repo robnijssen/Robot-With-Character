@@ -59,8 +59,8 @@ class Variables:
     # a variable to keep track of how far away the face is
     distance_to_face = 0
     # last known face position's joint values
-    face_joint_angles = AnglesList()
-    face_joint_angles.angles = [-2.315057341252462, -1.1454232374774378, -2.5245259443866175, 0.5526210069656372, -4.67750066915621, -1.77920324007]
+    face_position = PositionList()
+    face_position.angles = [-2.315057341252462, -1.1454232374774378, -2.5245259443866175, 0.5526210069656372, -4.67750066915621, -1.77920324007]
     # happy wiggle values
     happy_wiggle_default = [-2.315057341252462, -1.1454232374774378, -2.5245259443866175, 0.5526210069656372, -4.67750066915621, -1.77920324007]
     happy_wiggle_start = list(happy_wiggle_default)
@@ -77,11 +77,11 @@ class Functions:
     def happy_determine_wiggle_values(self):
         # to do: add more variants and a little random
         # calculate corrections for pitch and yaw approximation from the face position
-        correction_0 = reactVariables.happy_wiggle_start[0] - reactVariables.face_joint_angles.angles[0]
-        correction_1 = reactVariables.happy_wiggle_start[1] - reactVariables.face_joint_angles.angles[1]
-        correction_2 = reactVariables.happy_wiggle_start[2] - reactVariables.face_joint_angles.angles[2]
-        correction_3 = reactVariables.happy_wiggle_start[3] - reactVariables.face_joint_angles.angles[3]
-        correction_4 = reactVariables.happy_wiggle_start[4] - reactVariables.face_joint_angles.angles[4]
+        correction_0 = reactVariables.happy_wiggle_start[0] - reactVariables.face_position.angles[0]
+        correction_1 = reactVariables.happy_wiggle_start[1] - reactVariables.face_position.angles[1]
+        correction_2 = reactVariables.happy_wiggle_start[2] - reactVariables.face_position.angles[2]
+        correction_3 = reactVariables.happy_wiggle_start[3] - reactVariables.face_position.angles[3]
+        correction_4 = reactVariables.happy_wiggle_start[4] - reactVariables.face_position.angles[4]
         # reset the start values with default values
         reactVariables.happy_wiggle_start = list(reactVariables.happy_wiggle_default)
         # set approximated pitch and yaw of the center over default values
@@ -114,10 +114,11 @@ class Callbacks:
         reactVariables.cmd_state = state.data
     def fb_move_executor(self, feedback):
         reactVariables.fb_move_executor = feedback.data
-    def distance_to_face(self, distance):
-        reactVariables.distance_to_face = distance.data
-    def face_angles_update(self, angles):
-        reactVariables.face_joint_angles.angles = angles.angles
+    def distance_to_face(self, coordinates):
+        reactVariables.distance_to_face = coordinates.d
+    def face_angles_update(self, position):
+        reactVariables.face_position.angles = position.angles
+        reactVariables.face_position.pose = position.pose
 
 # state machine
 
@@ -232,7 +233,7 @@ class Check(State):
         reactVisionChecks(reactVariables.vision_request)
         # produce and send request for the move queue
         request = SendGoalRequest()
-        request.goal, request.type, request.speed, request.acceleration, request.tolerance, request.delay = reactVariables.face_joint_angles.angles, 0, reactConstants.general_max_speed, reactConstants.general_max_acceleration, reactConstants.tolerance, reactConstants.sleeptime
+        request.goal, request.type, request.speed, request.acceleration, request.tolerance, request.delay = reactVariables.face_position.angles, 0, reactConstants.general_max_speed, reactConstants.general_max_acceleration, reactConstants.tolerance, reactConstants.sleeptime
         reactOverwriteGoal(request)
         reactVariables.person_detected = False
     def mainRun(self):
@@ -283,8 +284,8 @@ if __name__ == '__main__':
         # init subscribers
         reactCmd_state = rospy.Subscriber("/cmd_state", Int8, reactCallbacks.state)
         reactFb_move_executor = rospy.Subscriber("/fb_move_executor", Int8, reactCallbacks.fb_move_executor)
-        reactDistance_to_face = rospy.Subscriber("/vision_face_d", Int8, reactCallbacks.distance_to_face)
-        reactFace_joint_angles = rospy.Subscriber("/face_joint_angles", AnglesList, reactCallbacks.face_angles_update)
+        reactDistance_to_face = rospy.Subscriber("/vision_face_coordinates", FaceCoordinates, reactCallbacks.distance_to_face)
+        reactFace_position = rospy.Subscriber("/face_position", PositionList, reactCallbacks.face_angles_update)
 
         # init services
         rospy.wait_for_service('/overwrite_goal')
@@ -301,7 +302,7 @@ if __name__ == '__main__':
         ReactMachine.reactSad = ReactSad()
         ReactMachine.cheat = Cheat()
         ReactMachine.check = Check()
-        ReactMachine().runAll(0)
+        ReactMachine().runAll()
 
     except rospy.ROSInterruptException:
         pass
