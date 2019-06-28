@@ -138,6 +138,10 @@ if __name__ == '__main__':
         moveit_commander.roscpp_initialize(sys.argv)
         execute_group = moveit_commander.MoveGroupCommander("manipulator")
 
+        # set max speed and max acceleration to 100%
+        execute_group.set_max_velocity_scaling_factor(1.0)
+        execute_group.set_max_acceleration_scaling_factor(1.0)
+
         # set reference, allow replanning, give the move group enough time and tries
         execute_group.set_pose_reference_frame = "/base_link"
         execute_group.allow_replanning(True)

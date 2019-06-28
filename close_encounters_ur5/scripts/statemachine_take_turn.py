@@ -174,23 +174,24 @@ class Grab(State):
     def mainRun(self):
         rospy.sleep(takeTurnConstants.griptime)
     def next(self):
+        return TakeTurnMachine.roll
         # check pressure on the gripper
-        if gripper_input.gOBJ != 2:
-            # tell gripper to open
-            takeTurnGripperCommand.rPR = 0
-            takeTurnGripperGripperPublisher.publish(takeTurnGripperCommand)
-            return TakeTurnMachine.askForCup
-        else:
-            return TakeTurnMachine.roll
+        #if gripper_input.gOBJ != 2:
+        #    # tell gripper to open
+        #    takeTurnGripperCommand.rPR = 0
+        #    takeTurnGripperGripperPublisher.publish(takeTurnGripperCommand)
+        #    return TakeTurnMachine.askForCup
+        #else:
+        #    return TakeTurnMachine.roll
             
 class Roll(State):
     def transitionRun(self):
         rospy.loginfo("Take turn: Rolling dice using the cup.")
         # send to move queue
-        takeTurnVariables.goal_req.goal, takeTurnVariables.goal_req.type = takeTurnFunctions.read_from_ini('roll_pose', '3'), 2
+        takeTurnVariables.goal_req.goal, takeTurnVariables.goal_req.type = takeTurnFunctions.read_from_ini('roll_1_pose', '1'), 2
         takeTurnOverwriteGoal(takeTurnVariables.goal_req)
-        for i in range(4, 10):
-            takeTurnVariables.goal_req.goal = takeTurnFunctions.read_from_ini('roll_pose', str(i))
+        for i in range(2, 10):
+            takeTurnVariables.goal_req.goal = takeTurnFunctions.read_from_ini('roll_1_pose', str(i))
             takeTurnAddGoal(takeTurnVariables.goal_req)
         takeTurnVariables.goal_req.goal = []
         takeTurnAddGoal(takeTurnVariables.goal_req)
@@ -211,7 +212,20 @@ class Release(State):
     def mainRun(self):
         rospy.sleep(takeTurnConstants.griptime)
     def next(self):
-        return TakeTurnMachine.idle
+        return TakeTurnMachine.moveClear
+
+class MoveClear(State):
+    def transitionRun(self):
+        rospy.loginfo("Take turn: Getting clear.")
+        takeTurnVariables.goal_req.goal, takeTurnVariables.goal_req.type = takeTurnFunctions.read_from_ini('get_clear_joint', '1'), 0
+        takeTurnOverwriteGoal(takeTurnVariables.goal_req)
+    def mainRun(self):
+        rospy.sleep(takeTurnConstants.griptime)
+    def next(self):
+        if takeTurnVariables.fb_move_executor == 1:
+            return TakeTurnMachine.idle
+        else:
+            return TakeTurnMachine.moveClear
 
 if __name__ == '__main__':
     try:
@@ -276,6 +290,7 @@ if __name__ == '__main__':
         TakeTurnMachine.grab = Grab()
         TakeTurnMachine.roll = Roll()
         TakeTurnMachine.release = Release()
+        TakeTurnMachine.moveClear = MoveClear()
         TakeTurnMachine().runAll()
 
     except rospy.ROSInterruptException:

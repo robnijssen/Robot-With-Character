@@ -445,7 +445,7 @@ if __name__ == '__main__':
         DemoMachine.waitForTurn = WaitForTurn()
         DemoMachine.checkScore = CheckScore()
         DemoMachine.react = React()
-        DemoMachine().runAll(0)
+        DemoMachine().runAll()
 
     except rospy.ROSInterruptException:
         pass

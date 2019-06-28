@@ -23,13 +23,13 @@ class Constants:
     # sleep between state checks
     sleeptime = 0.3
     # time to check the tray
-    checktime = 1.0
+    checktime = 5.0
     # time for the gripper to grab/release
     grabtime = 2
     # movement values
     general_max_speed = 1.0
     general_max_acceleration = 1.0
-    tolerance = 0.001
+    tolerance = 0.0001
 
 class Variables:
     # a variable to keep track of what state the control is in
@@ -42,23 +42,6 @@ class Variables:
     dice_in_tray = 0
     # prepare request for vision node
     vision_request = SetVisionModeRequest()
-        
-class Requests:
-    # a position where the playing fied is completely visible
-    check_for_dice_angles = [-2.1188, -1.5585, -1.5440, -1.5046, -4.7562, -1.3496] # to do: check these angles
-    check_for_cup_angles = [-2.0824106, -1.16059, -2.5390597, -0.0665124, -4.364429, -1.5840481] # to do: check these angles
-    place_a_die_angles_0 = [-2.0570381, -1.49767238, -1.844947, -1.063991, -4.778829, -1.608445] # to do: check these angles
-    place_a_die_angles_1 = [-1.765497, -1.32242423, -1.841498, -1.2224, -4.72007, -1.608445] # to do: check these angles
-    place_a_die_angles_2 = [-1.806762, -1.404764, -1.854193, -1.2226, -4.717292, -1.71169] # to do: check these angles
-    # a joint angle request ready with constants
-    joint_request = SendGoalRequest()
-    joint_request.goal, joint_request.type, joint_request.speed, joint_request.acceleration, joint_request.tolerance, joint_request.delay = check_for_dice_angles, 0, Constants().general_max_speed, Constants().general_max_acceleration, Constants().tolerance, Constants().sleeptime
-    # a pose within reach to return to
-    defaultPose = [] # to do: add this pose
-    # a pose request ready with constants
-    pose_request = SendGoalRequest()
-    pose_request.goal, pose_request.type, pose_request.speed, pose_request.acceleration, pose_request.tolerance, pose_request.delay = defaultPose, 1, Constants().general_max_speed, Constants().general_max_acceleration, Constants().tolerance, Constants().sleeptime
-    
     
 # functions used in state machine
 
@@ -131,12 +114,17 @@ class GoToDiceCheckingPosition(State):
 class CheckForDice(State):
     def transitionRun(self):
         rospy.loginfo("Set up: Checking for dice.")
+    def mainRun(self):
+        rospy.sleep(setUpConstants.checktime)
         # tell the vision node to look for dice
         setUpVariables.vision_request.mode = 2
         setUpVisionChecks(setUpVariables.vision_request)
-    def mainRun(self):
         rospy.sleep(setUpConstants.checktime)
+        # tell the vision node to stop looking for dice
+        setUpVariables.vision_request.mode = 0
+        setUpVisionChecks(setUpVariables.vision_request)
     def next(self):
+        print(setUpVariables.dice_in_tray)
         if setUpVariables.dice_in_tray > 0:
             return SetUpMachine.askForDiceInCup
         else:
@@ -163,98 +151,6 @@ class AskForDiceInCup(State):
         else:
             return SetUpMachine.goToDiceCheckingPosition
 
-"""
-class PickADie(State):
-    def transitionRun(self):
-        rospy.loginfo("Set up: Picking a die.")
-        # send to move queue
-        setUpRequests.pose_request.goal = setUpRequests.defaultPose
-        setUpOverwritePoseGoal(setUpRequests.pose_request)
-    def mainRun(self):
-        rospy.sleep(setUpConstants.sleeptime)
-    def next(self):
-        if(setUpVariables.fb_move_executor == 1):
-            return SetUpMachine.grabADie
-        else:
-            return SetUpMachine.pickADie
-
-class GrabADie(State):
-    def transitionRun(self):
-        rospy.loginfo("Set up: Closing the gripper.")
-        # tell gripper to close
-        setUpGripperCommand.rPR = 250
-        setUpGripperGripperPublisher.publish(takeTurnGripperCommand)
-    def mainRun(self):
-        rospy.sleep(setUpConstants.grabtime)
-    def next(self):
-        return SetUpMachine.checkForCup
-
-class MoveToCheckForCup(State):
-    def transitionRun(self):
-        rospy.loginfo("Set up: Moving to check for the cup.")
-        # send move to queue
-        setUpRequests.joint_request.goal = setUpRequests.check_for_cup_angles
-        setUpOverwriteGoal(setUpRequests.joint_request)
-    def mainRun(self):
-        rospy.sleep(setUpConstants.sleeptime)
-    def next(self):
-        if(setUpVariables.fb_move_executor == 1):
-            return SetUpMachine.checkForCup
-        else:
-            return SetUpMachine.moveToCheckForCup
-        
-class CheckForCup(State):
-    def transitionRun(self):
-        rospy.loginfo("Set up: Checking for the cup.")
-        # to do: tell vision node to check for a cup
-    def mainRun(self):
-        rospy.sleep(setUpConstants.sleeptime)
-        # to do: do a check for a detected cup
-    def next(self):
-        return SetUpMachine.placeADie
-        # to do: make the return dependant on if the cup was detected
-
-class AskForCup(State):
-    def transitionRun(self):
-        rospy.loginfo("Set Up: Asking for the cup.")
-        # to do: send to the move queue
-    def mainRun(self):
-        rospy.sleep(setUpConstants.sleeptime)
-    def next(self):
-        if(setUpVariables.fb_move_executor == 1):
-            return SetUpMachine.checkForCup
-        else:
-            return SetUpMachine.askForCup
-
-class PlaceADie(State):
-    def transitionRun(self):
-        rospy.loginfo("Set up: Placing a die.")
-        # send to move queue
-        setUpRequests.pose_request.goal = setUpRequests.place_a_die_angles_0
-        setUpOverwriteGoal(setUpRequests.pose_request)
-        setUpRequests.pose_request.goal = setUpRequests.place_a_die_angles_1
-        setUpAddGoal(setUpRequests.pose_request)
-        setUpRequests.pose_request.goal = setUpRequests.place_a_die_angles_2
-        setUpAddGoal(setUpRequests.pose_request)
-    def mainRun(self):
-        rospy.sleep(setUpConstants.sleeptime)
-    def next(self):
-        if(setUpVariables.fb_move_executor == 3):
-            return SetUpMachine.releaseADie
-        else:
-            return SetUpMachine.placeADie
-
-class ReleaseADie(State):
-    def transitionRun(self):
-        rospy.loginfo("Set up: Opening the gripper.")
-        # tell gripper to open
-        takeTurnGripperCommand.rPR = 0
-        takeTurnGripperGripperPublisher.publish(takeTurnGripperCommand)
-    def mainRun(self):
-        rospy.sleep(setUpConstants.grabtime)
-    def next(self):
-        return SetUpMachine.goToDiceCheckingPosition
-"""
 if __name__ == '__main__':
     try:
         # start a new node
@@ -269,7 +165,6 @@ if __name__ == '__main__':
         fb_set_up_publisher = rospy.Publisher('/fb_set_up', Int8, queue_size=1)
 
         setUpVariables = Variables()
-        setUpRequests = Requests()
         setUpCallbacks = Callbacks()
         setUpFunctions = Functions()
         setUpConstants = Constants()
@@ -283,7 +178,7 @@ if __name__ == '__main__':
         # init subscribers
         setUpCmd_state = rospy.Subscriber("/cmd_state", Int8, setUpCallbacks.state)
         setUpFb_move_executor = rospy.Subscriber("/fb_move_executor", Int8, setUpCallbacks.fb_move_executor)
-        setUpNumber_of_dice = rospy.Subscriber("/vision_number_of_dice", Int8, setUpCallbacks.number_of_dice)
+        setUpNumber_of_dice = rospy.Subscriber("/vision_amount", Int8, setUpCallbacks.number_of_dice)
 
         # init services
         rospy.wait_for_service('/overwrite_goal')
@@ -299,15 +194,6 @@ if __name__ == '__main__':
         SetUpMachine.goToDiceCheckingPosition = GoToDiceCheckingPosition()
         SetUpMachine.checkForDice = CheckForDice()
         SetUpMachine.askForDiceInCup = AskForDiceInCup()
-        """
-        SetUpMachine.pickADie = PickADie()
-        SetUpMachine.grabADie = GrabADie()
-        SetUpMachine.moveToCheckForCup = MoveToCheckForCup()
-        SetUpMachine.checkForCup = CheckForCup()
-        SetUpMachine.askForCup = AskForCup()
-        SetUpMachine.placeADie = PlaceADie()
-        SetUpMachine.releaseADie = ReleaseADie()
-        """
         SetUpMachine().runAll()
 
     except rospy.ROSInterruptException:

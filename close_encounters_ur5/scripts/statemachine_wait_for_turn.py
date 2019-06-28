@@ -128,7 +128,7 @@ class GoToTray(State):
         # send to move queue
         request = SendGoalRequest()
         request.type, request.speed, request.acceleration, request.tolerance, request.delay = 0, waitForTurnConstants.general_max_speed, waitForTurnConstants.general_max_acceleration, waitForTurnConstants.tolerance, waitForTurnConstants.sleeptime
-        request.goal = waitForTurnFunctions.read_from_ini('go_to_tray_joint', '1')
+        request.goal = waitForTurnFunctions.read_from_ini('check_for_dice_joint', '1')
         waitForTurnOverwriteGoal(request)
     def mainRun(self):
         rospy.sleep(waitForTurnConstants.sleeptime)
@@ -161,7 +161,7 @@ class GoToFaceAsking(State):
         # send to move queue
         request = SendGoalRequest()
         request.type, request.speed, request.acceleration, request.tolerance, request.delay = 0, waitForTurnConstants.general_max_speed, waitForTurnConstants.general_max_acceleration, waitForTurnConstants.tolerance, waitForTurnConstants.sleeptime
-        request.goal = waitForTurnVariables.face_position.angles
+        request.goal = list(waitForTurnVariables.face_position.angles)
         waitForTurnOverwriteGoal(request)
         if randint(0, 1) == 1:
             request.goal[5] += float(randint(3, 10)) / 10.0
@@ -204,7 +204,7 @@ if __name__ == '__main__':
         waitForTurnFb_move_executor = rospy.Subscriber("/fb_move_executor", Int8, waitForTurnCallbacks.fb_move_executor)
         waitForTurnDistance_to_face = rospy.Subscriber("/vision_face_coordinates", FaceCoordinates, waitForTurnCallbacks.distance_to_face)
         waitForTurnFace_position = rospy.Subscriber("/face_position", PositionList, waitForTurnCallbacks.face_angles_update)
-        waitForTurnNumber_of_dice = rospy.Subscriber("/vision_number_of_dice", Int8, waitForTurnCallbacks.number_of_dice)
+        waitForTurnNumber_of_dice = rospy.Subscriber("/vision_amount", Int8, waitForTurnCallbacks.number_of_dice)
 
         # init services
         rospy.wait_for_service('/overwrite_goal')

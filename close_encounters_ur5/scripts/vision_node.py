@@ -132,6 +132,8 @@ class DiceMain():
             self.amount = pipCount.AmountOfDices(frame)
             # show results
             #self.showImages()
+        else:
+            dice_amount_publisher.publish(-1)
     def showImages(self):
         cv2.imshow("Mask", self.mask)
         cv2.imshow("Result", self.result)
@@ -223,7 +225,8 @@ class PipCount():
     kernel = (5, 5)
     kernelOpen = np.ones((5,5))
     kernelClose = np.ones((20,20))
-    previous_amount = 0
+    previous_result = -1
+    results = []
     def AmountOfDices(self, frame):
         # Emty list to keep track of amount of dices.
         self.contours_list_dice = []
@@ -256,13 +259,25 @@ class PipCount():
         #cv2.imshow('mask', maskClosed)
         #cv2.imshow("Dice detected", frame)
         #cv2.imshow("edge", edge_detected_image)
-        # Return the amount of dices to the main function. 
+        # Return the amount of dice to the main function. 
         result = (len(self.contours_list_dice)/2)
-        dice_amount_publisher.publish(result)
-        if self.previous_amount != result:
-            self.previous_amount = result
-            rospy.loginfo("\tVision: Amount of dice found: " + str(result))
-        return result
+        # make sure the list doesn't grow longer than 10
+        if len(self.results) > 10:
+            del self.results[0]
+        self.results.append(result)
+        try:
+            if self.results[-1] == self.results[-2]:
+                if self.previous_result != result:
+                    self.previous_result = result
+                    dice_amount_publisher.publish(result)
+                    rospy.loginfo("\tVision: Amount of dice found: " + str(result))
+                    return result
+                else:
+                    return -1
+            else:
+                return -1
+        except:
+            return -1
     def countBlobs(self, frame):
         # Create parameters for blobdetection
         parameters = cv2.SimpleBlobDetector_Params()
