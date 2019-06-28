@@ -4,13 +4,16 @@ This package contains a control structure for the UR5 robotic arm, made for the 
 This package contains the state machine structure in python files, launch files for launching them, and some handy things like a gripper check and an file creator to record new animations. 
 
 ## Dependencies:
+
 ` cd ~/<your catkin workspace>/src/ ` 
 
 ` git clone <links below> ` 
 
 https://github.com/ros-industrial/ur_modern_driver.git
 
-https://github.com/ros-industrial/universal_robot.git https://github.com/ros-industrial/robotiq.git 
+https://github.com/ros-industrial/universal_robot.git 
+
+https://github.com/ros-industrial/robotiq.git 
 
 https://github.com/robnijssen/Robot-With-Character.git
 
