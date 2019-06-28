@@ -50,6 +50,17 @@ Netmask: 24
 
 Gateway: 255.255.255.0
 
+## Robotiq gripper 2F 85 
+
+For setting up the robotiq gripper, we refer to this link: 
+
+http://wiki.ros.org/robotiq
+
+
+
+If you want to use your own gripper, make sure you can control it with the statemachine. 
+
+
 ## Running this package:
 
 Running a simulation can be done by launching:
