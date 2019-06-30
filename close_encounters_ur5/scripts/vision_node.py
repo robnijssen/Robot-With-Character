@@ -29,24 +29,22 @@ class Variables:
 
 class Callbacks:
     def set_vision_checks(self, mode):
-        if mode.mode == 0:
-            faceRecognition.mode = False
-            diceMain.mode = False
-            cupRecognition.mode = False
-        elif mode.mode == 1:
+        # set the modes to True/False
+        if mode.mode == 1:
             faceRecognition.mode = True
-            diceMain.mode = False
-            cupRecognition.mode = False
-        elif mode.mode == 2:
+        else:
             faceRecognition.mode = False
+        if mode.mode == 2:
             diceMain.mode = True
-            cupRecognition.mode = False
-        elif mode.mode == 3:
-            faceRecognition.mode = False
+        else:
             diceMain.mode = False
+        if mode.mode == 3:
             cupRecognition.mode = True
         else:
-            rospy.logwarn("\tVision: Tried to set unknown mode.")
+            cupRecognition.mode = False
+        # check if the mode was out of range
+        if mode.mode < 0 or mode.mode > 3:
+            rospy.logwarn("\t\t\tVision: Tried to set unknown mode.")
         return visionConstants.result
 
 class FaceRecognition:
@@ -111,7 +109,7 @@ class FaceRecognition:
                 self.coordinates.y = y_list[chosen_face]
                 self.coordinates.d = d_list[chosen_face]
                 self.coordinates.e = e_list[chosen_face]
-                rospy.loginfo("\tVision: Face found at coordinates: " + str(x_list[chosen_face]) + " " + str(y_list[chosen_face]) + " " + str(d_list[chosen_face])+ " " + str(e_list[chosen_face]))
+                rospy.loginfo("\t\t\tVision: Face found at coordinates: " + str(x_list[chosen_face]) + " " + str(y_list[chosen_face]) + " " + str(d_list[chosen_face])+ " " + str(e_list[chosen_face]))
             else:
                 # no face found --> don't draw a cross on the frame
                 # prepare coordinates for publishing
@@ -128,8 +126,8 @@ class DiceMain():
             # execute the code
             self.frameRes = cv2.resize(frame, (900, 900))
             self.mask, self.result, self.contourFrame = diceFunctions.contours(self.frameRes)
-            self.keypoints = pipCount.countBlobs(self.result)
-            self.amount = pipCount.AmountOfDices(frame)
+            self.keypoints = dicePipCount.amount_of_pips(self.result)
+            self.amount = dicePipCount.amount_of_dice(frame)
             # show results
             #self.showImages()
         else:
@@ -218,16 +216,16 @@ class DiceCalculate():
         self.orientationvar.append(angleRad)
         self.orientationvar = self.orientationvar[-2:]
 
-class PipCount():
-    readings = [0, 0]
-    display = [0, 0]
+class DicePipCount():
+    dice_results = [-1, -1]
+    previous_dice_result = -1
+    pip_results = [0, 0]
+    previous_pip_result = 0
     kernel_dice_count = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (15, 15))
     kernel = (5, 5)
     kernelOpen = np.ones((5,5))
     kernelClose = np.ones((20,20))
-    previous_result = -1
-    results = []
-    def AmountOfDices(self, frame):
+    def amount_of_dice(self, frame):
         # Emty list to keep track of amount of dices.
         self.contours_list_dice = []
         # Apply blur to smooth out noise and convert to hsv colorspace.
@@ -260,25 +258,22 @@ class PipCount():
         #cv2.imshow("Dice detected", frame)
         #cv2.imshow("edge", edge_detected_image)
         # Return the amount of dice to the main function. 
-        result = (len(self.contours_list_dice)/2)
-        # make sure the list doesn't grow longer than 10
-        if len(self.results) > 10:
-            del self.results[0]
-        self.results.append(result)
+        dice_result = (len(self.contours_list_dice)/2)
+        # make sure the list doesn't grow longer than this value
+        if len(self.dice_results) > 5:
+            del self.dice_results[0]
+        self.dice_results.append(dice_result)
         try:
-            if self.results[-1] == self.results[-2]:
-                if self.previous_result != result:
-                    self.previous_result = result
-                    dice_amount_publisher.publish(result)
-                    rospy.loginfo("\tVision: Amount of dice found: " + str(result))
-                    return result
-                else:
-                    return -1
+            if self.dice_results[-1] == self.dice_results[-2] == self.dice_results[-3] and self.previous_dice_result != dice_result:
+                self.previous_dice_result = dice_result
+                dice_amount_publisher.publish(dice_result)
+                rospy.loginfo("\t\t\tVision: Amount of dice found: " + str(dice_result))
+                return dice_result
             else:
                 return -1
         except:
             return -1
-    def countBlobs(self, frame):
+    def amount_of_pips(self, frame):
         # Create parameters for blobdetection
         parameters = cv2.SimpleBlobDetector_Params()
         parameters.minDistBetweenBlobs = 5 #minDistBlob
@@ -288,30 +283,31 @@ class PipCount():
         parameters.minInertiaRatio = 0.5 #minInertia/10
         parameters.maxInertiaRatio = 1.0 #maxInertia/10
         parameters.filterByArea = True
-        parameters.minArea = 50 #minArea 
-        parameters.maxArea = 200 #qmaxArea 
+        parameters.minArea = 50
+        parameters.maxArea = 200
         parameters.filterByCircularity = True
         parameters.filterByConvexity = False
-
-        detector = cv2.SimpleBlobDetector_create(parameters) # create blob detector
-
-        frame = cv2.morphologyEx(frame, cv2.MORPH_CLOSE, self.kernel) # Filter frame
+        # create blob detector
+        detector = cv2.SimpleBlobDetector_create(parameters) 
+        # Filter frame
+        frame = cv2.morphologyEx(frame, cv2.MORPH_CLOSE, self.kernel) 
         frame = cv2.dilate(frame, (self.kernel))
-
-        keypoints = detector.detect(frame) # Detect the keypoints
-        img_with_keypoints = cv2.drawKeypoints(frame, keypoints, np.array([]), (0,0,255), cv2.DRAW_MATCHES_FLAGS_DRAW_RICH_KEYPOINTS) # Draw the keypoints on frame
-
-        reading = len(keypoints) # How many keypoints
-
-        self.readings.append(reading)
-        # Print the number of pips when 3 frames are the same pip numbers
-        if self.readings[-1] == self.readings[-2] == self.readings[-3]:
-            self.display.append(self.readings[-1])
-        if self.display[-1] != self.display[-2] and self.display[-1] != 0:
-            # publish score
-            rospy.loginfo("\tVision: amount of pips: " + str(self.display[-1]))
-            dice_score_publisher.publish(self.display[-1])
-        text = cv2.putText(img_with_keypoints, str(self.display[-1]), (50, 50), cv2.FONT_HERSHEY_SIMPLEX, 1.0, (0, 0, 0), 2, cv2.LINE_AA)
+        # Detect the keypoints
+        keypoints = detector.detect(frame) 
+        # Draw the keypoints on frame
+        img_with_keypoints = cv2.drawKeypoints(frame, keypoints, np.array([]), (0,0,255), cv2.DRAW_MATCHES_FLAGS_DRAW_RICH_KEYPOINTS) 
+        # amount of keypoints
+        pip_result = len(keypoints) 
+        # update the output value if the amount is the same for 3 times and different from the previous output
+        self.pip_results.append(pip_result)
+        if self.pip_results[-1] == self.pip_results[-2] == self.pip_results[-3] and self.previous_pip_result != pip_result:
+            previous_pip_result = pip_result
+            rospy.loginfo("\t\t\tVision: amount of pips: " + str(pip_result))
+            dice_score_publisher.publish(pip_result)
+        # make sure the length doesn't become to long
+        if len(self.pip_results) > 5:
+            del self.pip_results[0]
+        text = cv2.putText(img_with_keypoints, str(pip_result), (50, 50), cv2.FONT_HERSHEY_SIMPLEX, 1.0, (0, 0, 0), 2, cv2.LINE_AA)
         return img_with_keypoints
 
 class Cup():
@@ -329,9 +325,9 @@ class Cup():
         self.bottom = int(visionConstants.cen_y + (h / 2))
         self.left = int(visionConstants.cen_x - (w / 2))
         self.right = int(visionConstants.cen_x + (w / 2))
+        # keep track of the previous result
+        self.previous_cup_result = 0
     def main(self, frame):
-        # reset the cup_detected value
-        cup_detected = 0
         if self.mode == True:
             # show where the detection is looking
             cv2.rectangle(frame,(self.left,self.top),(self.right,self.bottom),(0,255,0),1)
@@ -353,6 +349,8 @@ class Cup():
             edge_detected_image = cv2.Canny(bilateral_filtered_image, 75, 200)
             # find contours
             _,contours,hier = cv2.findContours(edge_detected_image,cv2.RETR_LIST,cv2.CHAIN_APPROX_SIMPLE)
+            # (re)set value for setting and checking later
+            cup_result = 0
             # check contrours for the cup
             for c in contours:
                 # determine area of the contour
@@ -365,19 +363,21 @@ class Cup():
                 if w < 200 and w > 100 and h < 350 and h > 200 and area < 70000 and area > 20000:
                     # cup found
                     cv2.rectangle(frame,(self.left+x,self.top+y),(self.left+x+w,self.top+y+h),(0,255,0),5)
-                    cup_detected = 1
+                    cup_result = 1
                     break
-        if cup_detected == 1:
-            rospy.loginfo("\tVision: Cup detected.")
-        # publish the result
-        cup_detected_publisher.publish(cup_detected)
-        rospy.sleep(visionConstants.sleep_time)
+            if self.previous_cup_result != cup_result:
+                # print and publish the result
+                if cup_result == 1:
+                    rospy.loginfo("\t\t\tVision: Cup detected.")
+                else:
+                    rospy.loginfo("\t\t\tVision: Cup lost.")
+                cup_detected_publisher.publish(cup_result)
 
 if __name__ == '__main__':
     try:
         # start a new node
         rospy.init_node('vision_node', anonymous=True)
-        rospy.loginfo("\tVision: Node starting.")
+        rospy.loginfo("\t\t\tVision: Node starting.")
         
         visionConstants = Constants()
         visionVariables = Variables()
@@ -400,9 +400,9 @@ if __name__ == '__main__':
             visionConstants.res_x, visionConstants.res_y = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)), int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
             visionConstants.cen_x = int(visionConstants.res_x / 2)
             visionConstants.cen_y = int(visionConstants.res_y / 2)
-            rospy.loginfo("\tVision: Camera resolution: " + str(visionConstants.res_x) + ", " + str(visionConstants.res_y) + ".")
+            rospy.loginfo("\t\t\tVision: Camera resolution: " + str(visionConstants.res_x) + ", " + str(visionConstants.res_y) + ".")
         else:
-            rospy.logfatal("\tVision: No camera found. Please make sure it is connected and try again.")
+            rospy.logfatal("\t\t\tVision: No camera found. Please make sure it is connected and try again.")
 
         # init face recognition
         faceRecognition = FaceRecognition()
@@ -411,7 +411,7 @@ if __name__ == '__main__':
         diceMain = DiceMain()
         diceFunctions = DiceFunctions()
         diceCalculate = DiceCalculate()
-        pipCount = PipCount()
+        dicePipCount = DicePipCount()
 
         # init cup recognition
         cupRecognition = Cup()
