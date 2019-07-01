@@ -366,6 +366,7 @@ class Cup():
                     cup_result = 1
                     break
             if self.previous_cup_result != cup_result:
+                self.previous_cup_result = cup_result
                 # print and publish the result
                 if cup_result == 1:
                     rospy.loginfo("\t\t\tVision: Cup detected.")

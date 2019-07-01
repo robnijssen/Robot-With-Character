@@ -71,7 +71,7 @@ class Functions:
     def execute_goal(self, type_to_read, section_to_read, key_to_read):
         if type_to_read == 0:
             # run as joint goal
-            rospy.loginfo("Demo: Executing joint movement.")
+            rospy.loginfo("\t\t\t\t\t\tExecuting joint movement " + section_to_read)
             # read from the file
             goal = demoFunctions.read_from_ini(section_to_read, key_to_read)
             # compute a plan
@@ -81,7 +81,7 @@ class Functions:
             demoFunctions.stop()
         elif type_to_read == 1:
             # run as pose goal
-            rospy.loginfo("Demo: Executing pose movement.")
+            rospy.loginfo("\t\t\t\t\t\tExecuting pose movement " + section_to_read)
             # read from the file
             goal = demoFunctions.read_from_ini(section_to_read, key_to_read)
             # put the values in the goal
@@ -96,7 +96,7 @@ class Functions:
             demoFunctions.stop()
         elif type_to_read == 2:
             # run as cartesian path
-            rospy.loginfo("Demo: Executing cartesian path.")
+            rospy.loginfo("\t\t\t\t\t\tExecuting cartesian path " + section_to_read)
             # add starting position to waypoints
             demoVariables.waypoints.append(deepcopy(group.get_current_pose().pose))
             # add all waypoints by reading from the ini file
@@ -115,7 +115,7 @@ class Functions:
             group.execute(cartesian_plan, wait=True)
             demoFunctions.stop()
         else:
-            rospy.logerr("Demo: Wrong type to read entered in execute_goal.")
+            rospy.logerr("\t\t\t\t\t\tWrong type to read entered in execute_goal.")
     def execute_goals(self, type_to_read, section_to_read, keys_to_read):
         if type_to_read == 2:
             # make sure a cartesian path isn't executed more than once if started with this function
@@ -130,7 +130,7 @@ class Functions:
         # clear the waypoints
         del demoVariables.waypoints[:]
         demoVariables.waypoints_cleared = True
-    def check_number_of_dice(self):
+    def check_number_of_dice(self, check_for_negative):
         # go to checking position
         demoFunctions.execute_goal(0, 'check_for_dice_joint', 1)
         # tell vision to check for dice
@@ -138,18 +138,32 @@ class Functions:
         # wait for vision to check
         rospy.sleep(2)
         # check the number of dice
-        if demoVariables.amount_of_dice > 0:
-            # tell vision to stop checking for dice
-            demoVisionChecks(0)
-            # dice found
-            rospy.loginfo("Demo: Dice found.")
-            return True
+        if check_for_negative == False:
+            if demoVariables.amount_of_dice > 0:
+                # tell vision to stop checking for dice
+                demoVisionChecks(0)
+                # dice found
+                rospy.loginfo("\tDice found.")
+                return True
+            else:
+                # tell vision to stop checking for dice
+                demoVisionChecks(0)
+                # no dice found
+                rospy.loginfo("\tNo dice found.")
+                return False
         else:
-            # tell vision to stop checking for dice
-            demoVisionChecks(0)
-            # no dice found
-            rospy.loginfo("Demo: No dice found.")
-            return False
+            if demoVariables.amount_of_dice < 1:
+                # tell vision to stop checking for dice
+                demoVisionChecks(0)
+                # dice found
+                rospy.loginfo("\tNo dice found.")
+                return True
+            else:
+                # tell vision to stop checking for dice
+                demoVisionChecks(0)
+                # no dice found
+                rospy.loginfo("\tDice found.")
+                return False
     def ask_face_angles(self, face_position):
         # read face position in joint angles
         face_angles = self.read_from_ini('check_for_people_joint', face_position)
@@ -193,88 +207,181 @@ class CheckForPeople(State):
         if demoVariables.face_d > 0:
             demoVariables.face_position = 1
         else:
+            rospy.sleep(1)
             demoFunctions.execute_goal(0, 'check_for_people_joint', 2)
             if demoVariables.face_d > 0:
                 demoVariables.face_position = 2
             else:
                 demoFunctions.execute_goal(0, 'check_for_people_joint', 3)
-                rospy.sleep(0.3)
+                rospy.sleep(1)
                 if demoVariables.face_d > 0:
                     demoVariables.face_position = 3
         # tell vision to stop looking for a face
         demoVisionChecks(0)
     def next(self):
         if demoVariables.face_d == 2:
+            DemoMachine.idle.cup_may_be_on_the_stand = -1
             return DemoMachine.invite
         elif demoVariables.face_d == 1:
+            DemoMachine.idle.cup_may_be_on_the_stand = -1
             return DemoMachine.setUp
         else:
             return DemoMachine.idle
 
 class Idle(State):
+    def __init__(self):
+        self.past_moves_cup = []
+        self.past_moves_non_cup = []
+        self.cup_may_be_on_the_stand = -1
     def transitionRun(self):
         rospy.loginfo("IDLE")
     def mainRun(self):
         # do some idle movement
-        random_result = randint(0, 7)
-        if random_result == 0:
-            rospy.loginfo("Demo: curious_for_playing_field")
-            demoFunctions.execute_goals(2, 'curious_for_playing_field_pose', 6) # note the final movement is skipped
-        elif random_result == 1:
-            rospy.loginfo("Demo: curious_for_playing_field_1")
-            demoFunctions.execute_goals(2, 'curious_for_playing_field_1_pose', 3)
-        elif random_result == 2:
-            rospy.loginfo("Demo: curious_for_playing_field_2")
-            demoFunctions.execute_goals(2, 'curious_for_playing_field_2_pose', 4) # note the final few movements are skipped
-        elif random_result == 3:
-            rospy.loginfo("Demo: curious_for_cup")
-            demoFunctions.execute_goals(2, 'curious_for_cup_pose', 7)
-        elif random_result == 4:
-            rospy.loginfo("Demo: curious_for_cup_1")
-            demoFunctions.execute_goals(2, 'curious_for_cup_1_pose', 4)
-        elif random_result == 5:
-            rospy.loginfo("Demo: curious_for_cup_2")
-            demoFunctions.execute_goals(2, 'curious_for_cup_2_pose', 4) # note the final few movements are skipped
-        elif random_result == 6:
-            rospy.loginfo("Demo: bored_3")
-            demoFunctions.execute_goals(2, 'bored_3_pose', 6)
-        else:
-            rospy.loginfo("Demo: flip_cup")
-            demoFunctions.execute_goals(2, 'flip_cup_pose', 6)
+        # check if the cup is there every 5 or so times
+        if self.cup_may_be_on_the_stand > 5:
+            if self.cup_may_be_on_the_stand > 10:
+                self.cup_may_be_on_the_stand = -1
+            elif randint(0, 3) == 0:
+                self.cup_may_be_on_the_stand = -1
+        self.cup_may_be_on_the_stand += 1
+        thrown_off_the_stand = False
+        if self.cup_may_be_on_the_stand == 0:
+            demoFunctions.execute_goal(0, 'check_for_cup_joint', 1)
+            demoVisionChecks(3)
+            rospy.sleep(1)
+            demoVisionChecks(0)
+            if demoVariables.cup_detected == True:
+                random_result = randint(0, 8)
+                # make sure the same thing isn't repeated twice in a row
+                while random_result in self.past_moves_cup:
+                    random_result = randint(0, 4)
+                self.past_moves_cup.append(random_result)
+                if len(self.past_moves_cup) > 1:
+                    del self.past_moves_cup[0]
+                if random_result == 0:
+                    # flip cup
+                    demoFunctions.execute_goals(2, 'flip_cup_pose', 6)
+                    thrown_off_the_stand = True
+                elif random_result == 1:
+                    # throw cup badly
+                    # go to cup picking position
+                    demoFunctions.execute_goals(0, 'roll_3_joint_1', 2)
+                    # tell the gripper to close
+                    demoGripperCommand.rPR = 200
+                    demoGripperPublisher.publish(demoGripperCommand)
+                    rospy.sleep(2)
+                    # shake and roll
+                    demoFunctions.execute_goal(2, 'roll_3_pose_2', 3)
+                    # tell the gripper to open
+                    demoGripperCommand.rPR = 0
+                    demoGripperPublisher.publish(demoGripperCommand)
+                    rospy.sleep(2)
+                    # end movements
+                    demoFunctions.execute_goal(2, 'roll_3_pose_3', 1)
+                    rospy.sleep(1)
+                    thrown_off_the_stand = True
+                elif random_result == 2:
+                    # throw cup over the field in annoyed way
+                    # go to cup picking position
+                    demoFunctions.execute_goals(0, 'roll_3_joint_1', 2)
+                    # tell the gripper to close
+                    demoGripperCommand.rPR = 200
+                    demoGripperPublisher.publish(demoGripperCommand)
+                    rospy.sleep(2)
+                    # shake and roll
+                    demoFunctions.execute_goal(2, 'throw_cup_over_tray_1_pose_1', 4)
+                    # tell the gripper to open
+                    demoGripperCommand.rPR = 0
+                    demoGripperPublisher.publish(demoGripperCommand)
+                    # end movements
+                    demoFunctions.execute_goal(2, 'throw_cup_over_tray_1_pose_2', 3)
+                    thrown_off_the_stand = True
+                else:
+                    # nothing was done to the cup, so set this variable to see that the cup will probably still be on the stand
+                    self.cup_may_be_on_the_stand = -1
+            else:
+                random_result = randint(0, 2)
+                if random_result == 0:
+                    # look around for the cup
+                    demoFunctions.execute_goal(2, 'look_around_for_cup_pose', 10)
+                else:
+                    # look around for people
+                    demoFunctions.execute_goal(2, 'look_around_for_people_pose', 5)
+        if thrown_off_the_stand == False:
+            # if nothing happened to the cup, do another move
+            random_result = randint(0, 8)
+            while random_result in self.past_moves_non_cup:
+                random_result = randint(0, 8)
+            self.past_moves_non_cup.append(random_result)
+            if len(self.past_moves_non_cup) > 3:
+                del self.past_moves_non_cup[0]
+            if random_result == 0:
+                demoFunctions.execute_goals(2, 'curious_for_playing_field_pose', 6) # note the final movement is skipped
+            elif random_result == 1:
+                demoFunctions.execute_goals(2, 'curious_for_playing_field_1_pose', 3)
+            elif random_result == 2:
+                demoFunctions.execute_goals(2, 'curious_for_playing_field_2_pose', 4) # note the final few movements are skipped
+            elif random_result == 3:
+                demoFunctions.execute_goals(2, 'curious_for_cup_pose', 7)
+            elif random_result == 4:
+                demoFunctions.execute_goals(2, 'curious_for_cup_1_pose', 4)
+            elif random_result == 5:
+                demoFunctions.execute_goals(2, 'curious_for_cup_2_pose', 4) # note the final few movements are skipped
+            elif random_result == 6:
+                demoFunctions.execute_goals(2, 'bored_3_pose', 6)
     def next(self):
         return DemoMachine.checkForPeople
 
 class Invite(State):
+    def __init__(self):
+        self.past_moves = []
     def transitionRun(self):
         rospy.loginfo("INVITE")
     def mainRun(self):
-        # to do: add more inviting movements
-        rospy.loginfo("Demo: invite_3")
+        # randomize the movement
+        random_result = randint(0, 1)
+        # make sure the same thing isn't repeated twice in a row
+        while random_result in self.past_moves:
+            random_result = randint(0, 1)
+        self.past_moves.append(random_result)
+        if len(self.past_moves) > 1:
+            del self.past_moves[0]
+        if random_result == 0:
+            # to do: add more inviting movements
+            pass
+        else:
+            # to do: add more inviting movements
+            pass
         demoFunctions.execute_goals(2, 'invite_3_pose', 5) # note the final movement is skipped and asking is added
         demoFunctions.ask_face_angles(demoVariables.face_position)
     def next(self):
         return DemoMachine.checkForPeople
 
 class SetUp(State):
+    def __init__(self):
+        self.past_moves = []
     def transitionRun(self):
         rospy.loginfo("SET UP")
         self.check = True
     def mainRun(self):
-        self.check = demoFunctions.check_number_of_dice() # True=dice_in_tray False=no_dice_in_tray
-        if self.check:
+        self.check = demoFunctions.check_number_of_dice(True) # True=no_dice_in_tray False=dice_in_tray-->move_on
+        if not self.check:
             # ask for dice in the cup if there are dice in the tray
             random_result = randint(0, 2)
+            # make sure the same thing isn't repeated twice in a row
+            while random_result in self.past_moves:
+                random_result = randint(0, 2)
+            self.past_moves.append(random_result)
+            if len(self.past_moves) > 1:
+                del self.past_moves[0]
             if random_result == 0:
-                rospy.loginfo("Demo: ask_for_dice")
-                demoFunctions.execute_goals(2, 'ask_for_dice_pose', 6)
+                demoFunctions.execute_goals(2, 'ask_for_dice_pose', 4) # note the final two movements are skipped
             elif random_result == 1:
-                rospy.loginfo("Demo: ask_for_dice_1")
                 demoFunctions.execute_goals(2, 'ask_for_dice_1_pose', 6)
             else:
-                rospy.loginfo("Demo: ask_for_dice_2")
                 demoFunctions.execute_goals(2, 'ask_for_dice_2_pose', 8)
     def next(self):
-        if not self.check:
+        if self.check:
             if demoVariables.turn_number == 1:
                 return DemoMachine.checkForCup
             else:
@@ -287,17 +394,13 @@ class WaitForTurn(State):
         rospy.loginfo("WAIT FOR TURN")
     def mainRun(self):
         # encourage the person to take the turn by looking at the person, turning the 'head' as if asking and looking at the tray
-        rospy.loginfo("Demo: Asking.")
         demoFunctions.ask_face_angles(demoVariables.face_position)
+        demoFunctions.execute_goal(0, 'ask_for_throw_look_at_cup_joint', 1)
     def next(self):
-        self.check = demoFunctions.check_number_of_dice() # True=dice_in_tray False=no_dice_in_tray
-        #check = raw_input('Is the player done with his/her turn? (y/n) \n') ###
-        #if demoFunctions.check_for_yes(check): ###
+        self.check = demoFunctions.check_number_of_dice(False) # True=dice_in_tray-->move_on False=no_dice_in_tray
         if self.check:
-            demoVisionChecks(0)
             return DemoMachine.checkScore
         else:
-            demoVisionChecks(0)
             return DemoMachine.waitForTurn
 
 class CheckForCup(State):
@@ -309,56 +412,114 @@ class CheckForCup(State):
     def next(self):
         # tell vision to look for the cup
         demoVisionChecks(3)
-        # give the vision some time to check for the cup
         rospy.sleep(1)
-        #check = raw_input('Is the cup placed correctly on the stand? (y/n) \n') ###
-        #if demoFunctions.check_for_yes(check): ###
+        demoVisionChecks(0)
         if demoVariables.cup_detected == True:
-            demoVisionChecks(0)
-            rospy.loginfo("Demo: Cup found.")
+            rospy.loginfo("\tCup found.")
             return DemoMachine.takeTurn
         else:
-            demoVisionChecks(0)
-            rospy.loginfo("Demo: No cup found.")
+            rospy.loginfo("\tNo cup found.")
             # encourage the person to put the cup on the stand
             demoFunctions.ask_face_angles(demoVariables.face_position)
             return DemoMachine.checkForCup
 
 class TakeTurn(State):
+    def __init__(self):
+        self.past_moves = []
     def transitionRun(self):
         rospy.loginfo("TAKE TURN")
     def mainRun(self):
-        # go to pick position
-        rospy.loginfo("Demo: pick_cup_1")
-        demoFunctions.execute_goal(0, 'pick_cup_1_joint', 2)
-        # tell the gripper to close
-        demoGripperCommand.rPR = 200
-        demoGripperPublisher.publish(demoGripperCommand)
-        rospy.sleep(2)
         # roll and go back to place position
-        random_result = randint(0, 1)
-        if random_result == 0:
-            rospy.loginfo("Demo: roll_1")
+        self.random_result = randint(0, 3)
+        # make sure the same thing isn't repeated twice in a row
+        while self.random_result in self.past_moves:
+            self.random_result = randint(0, 3)
+        self.past_moves.append(self.random_result)
+        if len(self.past_moves) > 1:
+            del self.past_moves[0]
+        if self.random_result == 0:
+            demoFunctions.execute_goal(0, 'pick_cup_1_joint', 2)
+            # tell the gripper to close
+            demoGripperCommand.rPR = 200
+            demoGripperPublisher.publish(demoGripperCommand)
+            rospy.sleep(2)
+            # movement itself
             demoFunctions.execute_goal(2, 'roll_1_pose', 9)
+            # tell the gripper to open
+            demoGripperCommand.rPR = 0
+            demoGripperPublisher.publish(demoGripperCommand)
+            rospy.sleep(2)
+            # get clear from the cup  
+            demoFunctions.execute_goal(0, 'get_clear_joint', 1)
+            demoFunctions.execute_goal(0, 'default_joint', 1)
+        elif self.random_result == 1:
+            demoFunctions.execute_goal(0, 'pick_cup_1_joint', 2)
+            # tell the gripper to close
+            demoGripperCommand.rPR = 200
+            demoGripperPublisher.publish(demoGripperCommand)
+            rospy.sleep(2)
+            # movement itself
+            demoFunctions.execute_goal(2, 'roll_2_pose', 14)
+            # tell the gripper to open
+            demoGripperCommand.rPR = 0
+            demoGripperPublisher.publish(demoGripperCommand)
+            rospy.sleep(2)
+            # get clear from the cup  
+            demoFunctions.execute_goal(0, 'get_clear_joint', 1)
+            demoFunctions.execute_goal(0, 'default_joint', 1)
+        elif self.random_result == 2:
+            # go to cup picking position
+            demoFunctions.execute_goals(0, 'roll_3_joint_1', 2)
+            # tell the gripper to close
+            demoGripperCommand.rPR = 200
+            demoGripperPublisher.publish(demoGripperCommand)
+            rospy.sleep(2)
+            # shake and roll
+            demoFunctions.execute_goal(2, 'roll_3_pose_2', 3)
+            # tell the gripper to open
+            demoGripperCommand.rPR = 0
+            demoGripperPublisher.publish(demoGripperCommand)
+            rospy.sleep(2)
+            # end movements
+            demoFunctions.execute_goal(2, 'roll_3_pose_3', 1)
+            rospy.sleep(1)
+            demoFunctions.execute_goal(2, 'roll_3_pose_4', 3)
+            rospy.sleep(1)
+            demoFunctions.execute_goal(2, 'roll_3_pose_5', 2)
+            rospy.sleep(1)
         else:
-            rospy.loginfo("Demo: roll_3")
-            demoFunctions.execute_goal(2, 'roll_3_pose', 14)
-        # tell the gripper to open
-        demoGripperCommand.rPR = 0
-        demoGripperPublisher.publish(demoGripperCommand)
-        rospy.sleep(2)
-        # get clear from the cup  
-        demoFunctions.execute_goal(0, 'get_clear_joint', 1)
-        demoFunctions.execute_goal(0, 'default_joint', 1)
+            # go to cup picking position
+            demoFunctions.execute_goals(0, 'pick_cup_1_joint', 2)
+            # tell the gripper to close
+            demoGripperCommand.rPR = 200
+            demoGripperPublisher.publish(demoGripperCommand)
+            rospy.sleep(2)
+            # shake and roll
+            demoFunctions.execute_goal(2, 'roll_4_pose', 9)
+            # tell the gripper to open
+            demoGripperCommand.rPR = 0
+            demoGripperPublisher.publish(demoGripperCommand)
+            rospy.sleep(2)
     def next(self):
-        return DemoMachine.checkScore
+        if self.random_result == 2:
+            return DemoMachine.setUp
+        else:
+            return DemoMachine.checkScore
 
 class CheckScore(State):
+    def __init__(self):
+        self.past_moves = []
     def transitionRun(self):
         rospy.loginfo("CHECK SCORE")
     def mainRun(self):
         # do a check score sequence
         random_result = randint(0, 1)
+        # make sure the same thing isn't repeated twice in a row
+        while random_result in self.past_moves:
+            random_result = randint(0, 1)
+        self.past_moves.append(random_result)
+        if len(self.past_moves) > 1:
+            del self.past_moves[0]
         if random_result == 0:
             demoFunctions.execute_goal(2, 'check_score_3_pose', 2)
         else:
@@ -366,13 +527,18 @@ class CheckScore(State):
         demoFunctions.execute_goal(0, 'check_score_end_position_joint', 1)
     def next(self):
         try:
-            #score = int(raw_input('Please enter the score: \n')) ###
+            # tell the vision node to check for pips/dice
+            demoVisionChecks(2)
+            # give some time to the vision node to update
+            rospy.sleep(2)
+            # tell the vision node to stop checking for pips/dice
+            demoVisionChecks(0)
             score = demoVariables.amount_of_pips
-            rospy.loginfo("Demo: Amount of pips: " + str(score))
+            rospy.loginfo("\tAmount of pips: " + str(score))
             if score < 2 or score > 12:
-                rospy.logwarn("Demo: Score isn't possible with two dice, but I guess... Let's just continue.")
+                rospy.logwarn("Score isn't possible with two dice, but I guess... Let's just continue.")
         except:
-            rospy.logerr("Demo: Invalid score was set.")
+            rospy.logerr("Invalid score was set.")
         if demoVariables.turn_number == 1:
             demoVariables.turn_number = 0
             demoVariables.bot_score = score
@@ -394,39 +560,49 @@ class CheckScore(State):
             return DemoMachine.setUp
 
 class ReactOnWin(State):
+    def __init__(self):
+        self.past_moves = []
     def transitionRun(self):
         rospy.loginfo("REACT ON WIN")
     def mainRun(self):
-        random_result = randint(0, 2)
-        if random_result == 0:
-            rospy.loginfo("Demo: excited")
+        random_result = randint(1, 2)
+        # make sure the same thing isn't repeated twice in a row
+        while random_result in self.past_moves:
+            random_result = randint(1, 2)
+        self.past_moves.append(random_result)
+        if len(self.past_moves) > 1:
+            del self.past_moves[0]
+        if random_result == 0: # note this move has been disabled. it will try to go into singularity upwards for an unresearched reason
+            demoFunctions.execute_goal(0, 'excited_joint', 1)
             demoFunctions.execute_goal(2, 'excited_pose', 8)
         elif random_result == 1:
-            rospy.loginfo("Demo: excited_1")
             demoFunctions.execute_goal(2, 'excited_1_pose', 6)
         else:
-            rospy.loginfo("Demo: excited_2")
             demoFunctions.execute_goal(2, 'excited_2_pose', 5)
         demoFunctions.execute_goal(0, 'default_joint', 1)
     def next(self):
         return DemoMachine.checkForPeople
 
 class ReactOnLoss(State):
+    def __init__(self):
+        self.past_moves = []
     def transitionRun(self):
         rospy.loginfo("REACT ON LOSS")
     def mainRun(self):
         random_result = randint(0, 2)
+        # make sure the same thing isn't repeated twice in a row
+        while random_result in self.past_moves:
+            random_result = randint(0, 2)
+        self.past_moves.append(random_result)
+        if len(self.past_moves) > 1:
+            del self.past_moves[0]
         if random_result == 0:
-            rospy.loginfo("Demo: sad")
             demoFunctions.execute_goal(2, 'sad_pose', 8)
         elif random_result == 1:
-            rospy.loginfo("Demo: sad_1")
             demoFunctions.execute_goal(2, 'sad_1_pose', 12)
         elif random_result == 2:
-            rospy.loginfo("Demo: sad_2")
             demoFunctions.execute_goal(2, 'sad_2_pose', 9)
         else:
-            rospy.loginfo("Demo: pouting_1")
             demoFunctions.execute_goal(2, 'pouting_1_pose', 12)
         demoFunctions.execute_goal(0, 'default_joint', 1)
     def next(self):
@@ -495,6 +671,11 @@ if __name__ == '__main__':
         # wait and init the by vision provided service
         rospy.wait_for_service('/vision_checks')
         demoVisionChecks = rospy.ServiceProxy('/vision_checks', SetVisionMode)
+
+        # wait to make sure everything else has launched so far
+        rospy.loginfo("Waiting before starting.")
+        rospy.sleep(5)
+        rospy.loginfo("Starting.")
 
         # instantiate state machine
         DemoMachine.checkForPeople = CheckForPeople()
