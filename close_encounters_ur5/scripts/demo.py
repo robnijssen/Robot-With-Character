@@ -207,8 +207,8 @@ class CheckForPeople(State):
         if demoVariables.face_d > 0:
             demoVariables.face_position = 1
         else:
-            rospy.sleep(1)
             demoFunctions.execute_goal(0, 'check_for_people_joint', 2)
+            rospy.sleep(1)
             if demoVariables.face_d > 0:
                 demoVariables.face_position = 2
             else:
@@ -216,6 +216,11 @@ class CheckForPeople(State):
                 rospy.sleep(1)
                 if demoVariables.face_d > 0:
                     demoVariables.face_position = 3
+                else:
+                    demoFunctions.execute_goal(0, 'check_for_people_joint', 4)
+                    rospy.sleep(1)
+                    if demoVariables.face_d > 0:
+                        demoVariables.face_position = 4
         # tell vision to stop looking for a face
         demoVisionChecks(0)
     def next(self):
@@ -261,6 +266,8 @@ class Idle(State):
                 if random_result == 0:
                     # flip cup
                     demoFunctions.execute_goals(2, 'flip_cup_pose', 6)
+                    demoFunctions.execute_goals(2, 'flip_cup_pose', 6)
+                    thrown_off_the_stand = True
                     thrown_off_the_stand = True
                 elif random_result == 1:
                     # throw cup badly
@@ -377,7 +384,8 @@ class SetUp(State):
             if random_result == 0:
                 demoFunctions.execute_goals(2, 'ask_for_dice_pose', 4) # note the final two movements are skipped
             elif random_result == 1:
-                demoFunctions.execute_goals(2, 'ask_for_dice_1_pose', 6)
+                demoFunctions.execute_goals(2, 'ask_for_dice_1_pose', 6) # note the final few movements are skipped and replaced fo asking face
+                demoFunctions.ask_face_angles(demoVariables.face_position)
             else:
                 demoFunctions.execute_goals(2, 'ask_for_dice_2_pose', 8)
     def next(self):
@@ -430,12 +438,12 @@ class TakeTurn(State):
         rospy.loginfo("TAKE TURN")
     def mainRun(self):
         # roll and go back to place position
-        self.random_result = randint(0, 3)
+        self.random_result = randint(0, 4)
         # make sure the same thing isn't repeated twice in a row
         while self.random_result in self.past_moves:
-            self.random_result = randint(0, 3)
+            self.random_result = randint(0, 4)
         self.past_moves.append(self.random_result)
-        if len(self.past_moves) > 1:
+        if len(self.past_moves) > 2:
             del self.past_moves[0]
         if self.random_result == 0:
             demoFunctions.execute_goal(0, 'pick_cup_1_joint', 2)
@@ -451,7 +459,6 @@ class TakeTurn(State):
             rospy.sleep(2)
             # get clear from the cup  
             demoFunctions.execute_goal(0, 'get_clear_joint', 1)
-            demoFunctions.execute_goal(0, 'default_joint', 1)
         elif self.random_result == 1:
             demoFunctions.execute_goal(0, 'pick_cup_1_joint', 2)
             # tell the gripper to close
@@ -466,7 +473,6 @@ class TakeTurn(State):
             rospy.sleep(2)
             # get clear from the cup  
             demoFunctions.execute_goal(0, 'get_clear_joint', 1)
-            demoFunctions.execute_goal(0, 'default_joint', 1)
         elif self.random_result == 2:
             # go to cup picking position
             demoFunctions.execute_goals(0, 'roll_3_joint_1', 2)
@@ -474,8 +480,11 @@ class TakeTurn(State):
             demoGripperCommand.rPR = 200
             demoGripperPublisher.publish(demoGripperCommand)
             rospy.sleep(2)
-            # shake and roll
-            demoFunctions.execute_goal(2, 'roll_3_pose_2', 3)
+            # pick one of the shake and roll options
+            if randint(0, 1) == 0:
+                demoFunctions.execute_goal(2, 'roll_3_pose_2', 3)
+            else:
+                demoFunctions.execute_goal(2, 'roll_5_pose', 6)
             # tell the gripper to open
             demoGripperCommand.rPR = 0
             demoGripperPublisher.publish(demoGripperCommand)
@@ -487,7 +496,7 @@ class TakeTurn(State):
             rospy.sleep(1)
             demoFunctions.execute_goal(2, 'roll_3_pose_5', 2)
             rospy.sleep(1)
-        else:
+        elif self.random_result == 3:
             # go to cup picking position
             demoFunctions.execute_goals(0, 'pick_cup_1_joint', 2)
             # tell the gripper to close
@@ -500,6 +509,23 @@ class TakeTurn(State):
             demoGripperCommand.rPR = 0
             demoGripperPublisher.publish(demoGripperCommand)
             rospy.sleep(2)
+            # get clear from the cup  
+            demoFunctions.execute_goal(0, 'get_clear_joint', 1)
+        else:
+            # go to cup picking position
+            demoFunctions.execute_goals(0, 'pick_cup_1_joint', 2)
+            # tell the gripper to close
+            demoGripperCommand.rPR = 200
+            demoGripperPublisher.publish(demoGripperCommand)
+            rospy.sleep(2)
+            # shake and roll
+            demoFunctions.execute_goals(0, 'roll_by_kris_joint', 9)
+            # tell the gripper to open
+            demoGripperCommand.rPR = 0
+            demoGripperPublisher.publish(demoGripperCommand)
+            rospy.sleep(2)
+            # get clear from the cup  
+            demoFunctions.execute_goal(0, 'get_clear_joint', 1)
     def next(self):
         if self.random_result == 2:
             return DemoMachine.setUp
@@ -579,7 +605,7 @@ class ReactOnWin(State):
             demoFunctions.execute_goal(2, 'excited_1_pose', 6)
         else:
             demoFunctions.execute_goal(2, 'excited_2_pose', 5)
-        demoFunctions.execute_goal(0, 'default_joint', 1)
+        demoFunctions.execute_goal(0, 'check_for_people_joint', demoVariables.face_position)
     def next(self):
         return DemoMachine.checkForPeople
 
@@ -589,12 +615,12 @@ class ReactOnLoss(State):
     def transitionRun(self):
         rospy.loginfo("REACT ON LOSS")
     def mainRun(self):
-        random_result = randint(0, 2)
+        random_result = randint(0, 4)
         # make sure the same thing isn't repeated twice in a row
         while random_result in self.past_moves:
-            random_result = randint(0, 2)
+            random_result = randint(0, 4)
         self.past_moves.append(random_result)
-        if len(self.past_moves) > 1:
+        if len(self.past_moves) > 3:
             del self.past_moves[0]
         if random_result == 0:
             demoFunctions.execute_goal(2, 'sad_pose', 8)
@@ -602,9 +628,29 @@ class ReactOnLoss(State):
             demoFunctions.execute_goal(2, 'sad_1_pose', 12)
         elif random_result == 2:
             demoFunctions.execute_goal(2, 'sad_2_pose', 9)
-        else:
+        elif random_result == 3:
             demoFunctions.execute_goal(2, 'pouting_1_pose', 12)
-        demoFunctions.execute_goal(0, 'default_joint', 1)
+        else:
+            demoFunctions.execute_goal(0, 'check_for_people_joint', demoVariables.face_position)
+            # clap with the gripper
+            clap_time = 0.5
+            clap_amount = 10
+            demoGripperCommand.rPR = 254
+            demoGripperPublisher.publish(demoGripperCommand)
+            rospy.sleep(1)
+            for i in range(0, clap_amount):
+                demoGripperCommand.rPR = 200
+                demoGripperPublisher.publish(demoGripperCommand)
+                rospy.sleep(clap_time)
+                demoGripperCommand.rPR = 254
+                demoGripperPublisher.publish(demoGripperCommand)
+                rospy.sleep(clap_time)
+            demoGripperCommand.rPR = 0
+            demoGripperPublisher.publish(demoGripperCommand)
+            rospy.sleep(clap_time)
+            demoFunctions.execute_goal(0, 'check_for_people_joint', 1)
+            demoFunctions.execute_goal(0, 'check_for_people_joint', 4)
+        demoFunctions.execute_goal(0, 'check_for_people_joint', demoVariables.face_position)
     def next(self):
         return DemoMachine.checkForPeople
 
