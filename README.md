@@ -1,4 +1,4 @@
-# Close encountes: a robot with character
+# Close encounters: a robot with character
 This package contains a control structure for the UR5 robotic arm, made for the Close Encounters project in the Adaptive Robotics minor at Fontys Eindhoven 2018/2019.
 
 This package contains the state machine structure in python files, launch files for launching them, and some handy things like a gripper check and an file creator to record new animations. 
