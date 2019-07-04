@@ -1,0 +1,9 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://wiki.ros.org/xacro"
+       name="ur5" >
+
+  <!-- base -->
+  <xacro:include filename="$(find ur5/urdf/base.urdf" />
+  <xacro:base_ur5 parent="world" >
+	<origin xyz="0 0 0" rpy="0 0 0" />
+  </xacro:base_ur5>
