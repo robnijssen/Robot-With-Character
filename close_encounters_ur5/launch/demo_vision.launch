@@ -1,0 +1,10 @@
+<launch>
+
+    <!-- control node -->
+    <node pkg="close_encounters_ur5" type="demo.py" name="demo" output="screen"/>
+
+    <!-- vision node -->
+    <node pkg="close_encounters_ur5" type="vision_node.py" name="vision_node" output="screen"/>
+
+
+</launch>

@@ -1,0 +1,12 @@
+<launch>
+    
+    <!-- start the drivers, planner, and rviz -->
+    <include file="$(find close_encounters_ur5)/launch/arm_drivers.launch"/>
+
+    <!-- start the things needed for the gripper -->
+    <include file="$(find close_encounters_ur5)/launch/gripper.launch"/>
+
+    <!-- add custom state machines to control the arm -->
+    <include file="$(find close_encounters_ur5)/launch/statemachines.launch"/> 
+
+</launch>

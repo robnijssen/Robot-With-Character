@@ -1,0 +1,308 @@
+#!/usr/bin/env python
+import sys
+import rospy
+#import gripper_command # gripper stuff
+from state_machine import StateMachineBlueprint as StateMachine
+from state_machine import StateBlueprint as State
+from random import randint
+from std_msgs.msg import Int8
+# import service types
+from close_encounters_ur5.srv import *
+from close_encounters_ur5.msg import *
+from ConfigParser import ConfigParser # ini file reading/writing
+
+"""
+This stays in idle, till it's commanded to do something by the /cmd_state
+This topic is published by the statemachine_control.py
+
+After playing a game, it will try to show emotions.
+"""
+
+# constants and variables used in state machine
+
+class Constants:
+    # sleep between state checks
+    sleeptime = 0.1
+    # for debugging, delay time in empty reaction state
+    debugtime = 3
+    # max speed&acceleration
+    general_max_speed = 1.0
+    general_max_acceleration = 1.0
+    happy_wiggle_max_speed = 1.0
+    happy_wiggle_max_acceleration = 1.0
+    # tolerance in joints
+    tolerance = 0.001
+    # happy wiggle movement distance multipliers
+    happy_wiggle_global_multiplier = 0.4
+    happy_wiggle_x_multiplier_0 = 0.4
+    happy_wiggle_x_multiplier_4 = 0.6
+    # happy wiggle boundaries to be sure it won't move too far
+    happy_wiggle_left_boundary_0 = -0.455052677785055
+    happy_wiggle_left_boundary_4 = -6.210995327924387
+    happy_wiggle_right_boundary_0 = -3.9625261465655726
+    happy_wiggle_right_boundary_4 = -3.5705881754504603
+
+class Variables:
+    # a variable to keep track of what state the control is in
+    # state 5: bot won, state 6: player won
+    cmd_state = 1
+    # feedback from the move queue
+    fb_move_executor = 0
+    # a variable to keep track if a person is detected
+    person_detected = False
+    # a variable to keep track if the bot won or lost
+    won = False
+    # a variable to keep track if cheating was a success
+    success = False
+    # prepare request for vision node
+    vision_request = SetVisionModeRequest()
+    # a variable to keep track of how far away the face is
+    distance_to_face = 0
+    # last known face position's joint values
+    face_position = PositionList()
+    face_position.angles = [-2.315057341252462, -1.1454232374774378, -2.5245259443866175, 0.5526210069656372, -4.67750066915621, -1.77920324007]
+    # happy wiggle values
+    happy_wiggle_default = [-2.315057341252462, -1.1454232374774378, -2.5245259443866175, 0.5526210069656372, -4.67750066915621, -1.77920324007]
+    happy_wiggle_start = list(happy_wiggle_default)
+    happy_wiggle_left = list(happy_wiggle_default)
+    happy_wiggle_right = list(happy_wiggle_default)
+
+# functions used in state machine
+
+class Functions:
+    def read_from_ini(self, section_to_read, key_to_read):
+        goal_string = reactIniHandler.get(str(section_to_read), str(key_to_read))
+        goal_list = map(float, goal_string.split())
+        return goal_list
+    def happy_determine_wiggle_values(self):
+        # to do: add more variants and a little random
+        # calculate corrections for pitch and yaw approximation from the face position
+        correction_0 = reactVariables.happy_wiggle_start[0] - reactVariables.face_position.angles[0]
+        correction_1 = reactVariables.happy_wiggle_start[1] - reactVariables.face_position.angles[1]
+        correction_2 = reactVariables.happy_wiggle_start[2] - reactVariables.face_position.angles[2]
+        correction_3 = reactVariables.happy_wiggle_start[3] - reactVariables.face_position.angles[3]
+        correction_4 = reactVariables.happy_wiggle_start[4] - reactVariables.face_position.angles[4]
+        # reset the start values with default values
+        reactVariables.happy_wiggle_start = list(reactVariables.happy_wiggle_default)
+        # set approximated pitch and yaw of the center over default values
+        reactVariables.happy_wiggle_start[1] -= correction_1 + correction_2 - correction_3
+        reactVariables.happy_wiggle_start[0] -= correction_4 + correction_0
+        # copy values from the start to left and right
+        reactVariables.happy_wiggle_left = list(reactVariables.happy_wiggle_start)
+        reactVariables.happy_wiggle_right = list(reactVariables.happy_wiggle_start)
+        # alter some yaw values to produce left and right
+        reactVariables.happy_wiggle_left[0] += reactConstants.happy_wiggle_x_multiplier_0 * reactConstants.happy_wiggle_global_multiplier
+        reactVariables.happy_wiggle_left[4] -= reactConstants.happy_wiggle_x_multiplier_4 * reactConstants.happy_wiggle_global_multiplier
+        reactVariables.happy_wiggle_right[0] -= reactConstants.happy_wiggle_x_multiplier_0 * reactConstants.happy_wiggle_global_multiplier
+        reactVariables.happy_wiggle_right[4] += reactConstants.happy_wiggle_x_multiplier_4 * reactConstants.happy_wiggle_global_multiplier
+        # make sure the yaw won't go out of bounds
+        if reactVariables.happy_wiggle_left[0] > reactConstants.happy_wiggle_left_boundary_0:
+            rospy.logwarn("React: HappyWiggle: left_joint_values[0] tried to go out of bounds.")
+            reactVariables.happy_wiggle_left[0] = reactConstants.happy_wiggle_left_boundary_0
+        if reactVariables.happy_wiggle_left[4] < reactConstants.happy_wiggle_left_boundary_4:
+            rospy.logwarn("React: HappyWiggle: left_joint_values[4] tried to go out of bounds.")
+            reactVariables.happy_wiggle_left[4] = reactConstants.happy_wiggle_left_boundary_4
+        if reactVariables.happy_wiggle_right[0] < reactConstants.happy_wiggle_right_boundary_0:
+            rospy.logwarn("React: HappyWiggle: right_joint_values[0] tried to go out of bounds.")
+            reactVariables.happy_wiggle_right[0] = reactConstants.happy_wiggle_right_boundary_0
+        if reactVariables.happy_wiggle_right[4] > reactConstants.happy_wiggle_right_boundary_4:
+            rospy.logwarn("React: HappyWiggle: right_joint_values[4] tried to go out of bounds.")
+            reactVariables.happy_wiggle_right[4] = reactConstants.happy_wiggle_right_boundary_4
+
+class Callbacks:
+    def state(self, state):
+        reactVariables.cmd_state = state.data
+    def fb_move_executor(self, feedback):
+        reactVariables.fb_move_executor = feedback.data
+    def distance_to_face(self, coordinates):
+        reactVariables.distance_to_face = coordinates.d
+    def face_angles_update(self, position):
+        reactVariables.face_position.angles = position.angles
+        reactVariables.face_position.pose = position.pose
+
+# state machine
+
+class ReactMachine(StateMachine):
+    def __init__(self):
+        # init state is Idle
+        StateMachine.__init__(self, Idle())
+
+# states
+
+class Idle(State):
+    def transitionRun(self):
+        rospy.loginfo("React: Not active.")
+    def mainRun(self):
+        # publish feedback 0 (not active / not done reacting)
+        fb_react_publisher.publish(0)
+        rospy.sleep(reactConstants.sleeptime)
+    def next(self):
+        if reactVariables.cmd_state == 6:
+            return ReactMachine.reactHappy
+        elif reactVariables.cmd_state == 7:
+            return ReactMachine.reactSad
+        else:
+            return ReactMachine.idle
+
+class ReactHappy(State):
+    def transitionRun(self):
+        rospy.loginfo("React: Reacting happy.")
+        # determine how to do the wiggle
+        reactFunctions.happy_determine_wiggle_values()
+        # produce requests for the move queue
+        request0, request1, request2, request3, request4 = SendGoalRequest(), SendGoalRequest(), SendGoalRequest(), SendGoalRequest(), SendGoalRequest()
+        request0.goal, request0.type, request0.speed, request0.acceleration, request0.tolerance, request0.delay = reactVariables.happy_wiggle_start, 0, reactConstants.general_max_speed, reactConstants.general_max_acceleration, reactConstants.tolerance, 0.01
+        request1.goal, request1.type, request1.speed, request1.acceleration, request1.tolerance, request1.delay = reactVariables.happy_wiggle_left, 0, reactConstants.happy_wiggle_max_speed, reactConstants.happy_wiggle_max_acceleration, reactConstants.tolerance, 0.001
+        request2.goal, request2.type, request2.speed, request2.acceleration, request2.tolerance, request2.delay = reactVariables.happy_wiggle_right, 0, reactConstants.happy_wiggle_max_speed, reactConstants.happy_wiggle_max_acceleration, reactConstants.tolerance, 0.001
+        request3.goal, request3.type, request3.speed, request3.acceleration, request3.tolerance, request3.delay = reactVariables.happy_wiggle_left, 0, reactConstants.happy_wiggle_max_speed, reactConstants.happy_wiggle_max_acceleration, reactConstants.tolerance, 0.001
+        request4.goal, request4.type, request4.speed, request4.acceleration, request4.tolerance, request4.delay = reactVariables.happy_wiggle_start, 0, reactConstants.happy_wiggle_max_speed, reactConstants.happy_wiggle_max_acceleration, reactConstants.tolerance, 0.001
+        # send request list to the move queue
+        reactOverwriteGoal(request0)
+        reactAddGoal(request1)
+        reactAddGoal(request2)
+        reactAddGoal(request3)
+        reactAddGoal(request4)
+    def mainRun(self):
+        rospy.sleep(reactConstants.sleeptime)
+    def next(self):
+        if reactVariables.fb_move_executor == 5:
+            # move on with the next action after 5th move is complete
+            return ReactMachine.check
+        else:
+            return ReactMachine.reactHappy
+
+class ReactSad(State):
+    def transitionRun(self):
+        rospy.loginfo("React: Reacting sad.")
+        # send sad move
+        request = SendGoalRequest()
+        request.type, request.speed, request.acceleration, request.tolerance, request.delay = reactVariables.happy_wiggle_start, 2, reactConstants.general_max_speed, reactConstants.general_max_acceleration, reactConstants.tolerance, 0.01
+        request.goal = reactFunctions.read_from_ini(sad_pose, 1)
+        reactOverwriteGoal(request)
+        request.goal = reactFunctions.read_from_ini(sad_pose, 2)
+        reactAddGoal(request)
+        request.goal = reactFunctions.read_from_ini(sad_pose, 3)
+        reactAddGoal(request)
+        request.goal = reactFunctions.read_from_ini(sad_pose, 4)
+        reactAddGoal(request)
+        request.goal = reactFunctions.read_from_ini(sad_pose, 5)
+        reactAddGoal(request)
+        request.goal = reactFunctions.read_from_ini(sad_pose, 6)
+        reactAddGoal(request)
+        request.goal = reactFunctions.read_from_ini(sad_pose, 7)
+        reactAddGoal(request)
+        request.goal = reactFunctions.read_from_ini(sad_pose, 8)
+        reactAddGoal(request)
+        request.goal = []
+        reactAddGoal(request)
+    def mainRun(self):
+        rospy.sleep(reactConstants.sleeptime)
+    def next(self):
+        if reactVariables.fb_move_executor == 1:
+            return ReactMachine.check
+        else:
+            return ReactMachine.reactSad
+
+class Cheat(State):
+    def transitionRun(self):
+        rospy.loginfo("React: Cheating.")
+        # to do: send cheating moves
+    def mainRun(self):
+        rospy.sleep(reactConstants.sleeptime)
+        # check for success
+        # for debugging, y=success n=no_success
+        rospy.loginfo("React: Cheated. Was it a success? (y/n) (only for debugging)")
+        tmp_input = raw_input()
+        if tmp_input == 'y':
+            reactVariables.success = True
+        elif tmp_input == 'n':
+            reactVariables.success = False
+        else:
+            rospy.logwarn("React: The input wasn't y or n. Taking that as a no.")
+    def next(self):
+        if reactVariables.success == True:
+            return ReactMachine.reactHappy
+        else:
+            return ReactMachine.reactSad
+
+class Check(State):
+    def transitionRun(self):
+        rospy.loginfo("React: Checking for people.")
+        # tell vision node to look for a face
+        reactVariables.vision_request.mode = 1
+        reactVisionChecks(reactVariables.vision_request)
+        # produce and send request for the move queue
+        request = SendGoalRequest()
+        request.goal, request.type, request.speed, request.acceleration, request.tolerance, request.delay = reactVariables.face_position.angles, 0, reactConstants.general_max_speed, reactConstants.general_max_acceleration, reactConstants.tolerance, reactConstants.sleeptime
+        reactOverwriteGoal(request)
+        reactVariables.person_detected = False
+    def mainRun(self):
+        if reactVariables.distance_to_face > 0:
+            # face found; vision node can stop looking for a face
+            reactVariables.vision_request.mode = 0
+            reactVisionChecks(reactVariables.vision_request)
+            reactVariables.person_detected = True
+    def next(self):
+        if reactVariables.fb_move_executor == 1:
+            # tell vision node to stop looking for a face
+            reactVariables.vision_request.mode = 0
+            reactVisionChecks(reactVariables.vision_request)
+            # publish feedback about the person when done moving
+            if reactVariables.person_detected == True:
+                fb_react_publisher.publish(1)
+            else:
+                fb_react_publisher.publish(2)
+            rospy.sleep(2 * reactConstants.sleeptime)
+            return ReactMachine.idle
+        else:
+            return ReactMachine.check
+        
+
+if __name__ == '__main__':
+    try:
+        # start a new node
+        rospy.init_node('statemachine_react_node', anonymous=True)
+        rospy.loginfo("React: Node starting.")
+
+        # init publisher for the gripper
+        #gripper_command = GripperCommand()
+
+        # init /fb_react publisher to give feedback to the main control
+        fb_react_publisher = rospy.Publisher('/fb_react', Int8, queue_size=1)
+
+        reactVariables = Variables()
+        reactCallbacks = Callbacks()
+        reactConstants = Constants()
+        reactFunctions = Functions()
+
+        # init ini reading/writing
+        reactIniHandler = ConfigParser()
+        reactIniPath = rospy.get_param('~react_path')
+        rospy.loginfo("React: Using file: " + reactIniPath)
+        reactIniHandler.read(reactIniPath)
+
+        # init subscribers
+        reactCmd_state = rospy.Subscriber("/cmd_state", Int8, reactCallbacks.state)
+        reactFb_move_executor = rospy.Subscriber("/fb_move_executor", Int8, reactCallbacks.fb_move_executor)
+        reactDistance_to_face = rospy.Subscriber("/vision_face_coordinates", FaceCoordinates, reactCallbacks.distance_to_face)
+        reactFace_position = rospy.Subscriber("/face_position", PositionList, reactCallbacks.face_angles_update)
+
+        # init services
+        rospy.wait_for_service('/overwrite_goal')
+        rospy.wait_for_service('/add_goal')
+        rospy.wait_for_service('/vision_checks')
+        reactOverwriteGoal = rospy.ServiceProxy('/overwrite_goal', SendGoal)
+        reactAddGoal = rospy.ServiceProxy('/add_goal', SendGoal)
+        reactVisionChecks = rospy.ServiceProxy('/vision_checks', SetVisionMode)
+        
+        # instantiate state machine
+        #<statemachine_name>.<state_without_capital_letter> = <state_class_name>()
+        ReactMachine.idle = Idle()
+        ReactMachine.reactHappy = ReactHappy()
+        ReactMachine.reactSad = ReactSad()
+        ReactMachine.cheat = Cheat()
+        ReactMachine.check = Check()
+        ReactMachine().runAll()
+
+    except rospy.ROSInterruptException:
+        pass

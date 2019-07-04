@@ -1,0 +1,10 @@
+<launch>
+    <!-- this launch file runs a simulation and the custom state machine -->
+
+    <!-- add demo.launch for launching a simulation -->
+    <include file="$(find ur5)/launch/demo.launch"/>
+
+    <!-- add custom state machines to control the arm in the simulation -->
+    <include file="$(find close_encounters_ur5)/launch/statemachines.launch"/>    
+
+</launch>

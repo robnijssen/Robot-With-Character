@@ -1,0 +1,3 @@
+<launch>
+    <node name="Robotiq2FGripperRtuNode" type="Robotiq2FGripperRtuNode.py" pkg="robotiq_2f_gripper_control" args="/dev/ttyUSB0" /> 
+</launch>
